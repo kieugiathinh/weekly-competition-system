@@ -1,0 +1,1 @@
+# weekly-competition-system
