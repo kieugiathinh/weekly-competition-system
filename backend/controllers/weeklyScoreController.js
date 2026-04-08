@@ -2,6 +2,7 @@ import {
   saveScoreService,
   getRankingByWeekService,
   getScoreDetailService,
+  deleteScoreService,
 } from "../services/weeklyScoreService.js";
 
 // Lưu hoặc cập nhật điểm
@@ -39,4 +40,13 @@ const getScoreDetail = async (req, res) => {
   }
 };
 
-export { saveScore, getRankingByWeek, getScoreDetail };
+const deleteScore = async (req, res) => {
+  try {
+    const result = await deleteScoreService(req.params.id);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+export { saveScore, getRankingByWeek, getScoreDetail, deleteScore };

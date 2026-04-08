@@ -8,7 +8,15 @@ const weekSchema = mongoose.Schema(
     },
     weekNumber: {
       type: Number,
-      required: [true, "Vui lòng nhập số thứ tự tuần để sắp xếp (VD: 1, 2)"],
+      required: true, // Sẽ được tự động tính toán ở Service nếu không truyền lên
+    },
+    startDate: {
+      type: Date,
+      required: [true, "Vui lòng chọn ngày bắt đầu tuần"],
+    },
+    endDate: {
+      type: Date,
+      required: [true, "Vui lòng chọn ngày kết thúc tuần"],
     },
     schoolYearId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -17,13 +25,13 @@ const weekSchema = mongoose.Schema(
     },
     isLocked: {
       type: Boolean,
-      default: false, // Mới tạo ra thì mặc định là mở (để nhập điểm)
+      default: false,
     },
   },
   { timestamps: true },
 );
 
-// Đảm bảo trong 1 năm học không có 2 tuần trùng số thứ tự hoặc trùng tên
+// Đảm bảo không trùng lặp tên tuần và số thứ tự trong cùng 1 năm học
 weekSchema.index({ name: 1, schoolYearId: 1 }, { unique: true });
 weekSchema.index({ weekNumber: 1, schoolYearId: 1 }, { unique: true });
 

@@ -80,4 +80,22 @@ const getScoreDetailService = async (scoreId) => {
   return detail;
 };
 
-export { saveScoreService, getRankingByWeekService, getScoreDetailService };
+const deleteScoreService = async (id) => {
+  const score = await WeeklyScore.findById(id);
+  if (!score) throw new Error("Không tìm thấy bảng điểm");
+
+  // Kiểm tra xem tuần đó đã khóa chưa, khóa rồi thì cấm xóa
+  const week = await Week.findById(score.weekId);
+  if (week && week.isLocked)
+    throw new Error("Tuần này đã khóa sổ, không thể xóa điểm!");
+
+  await score.deleteOne();
+  return { message: "Đã xóa bảng điểm (Reset thành Chưa chấm)" };
+};
+
+export {
+  saveScoreService,
+  getRankingByWeekService,
+  getScoreDetailService,
+  deleteScoreService,
+};

@@ -3,6 +3,7 @@ import {
   saveScore,
   getRankingByWeek,
   getScoreDetail,
+  deleteScore,
 } from "../controllers/weeklyScoreController.js";
 import { protect } from "../middlewares/authMiddleware.js";
 
@@ -16,5 +17,7 @@ router.get("/ranking/:weekId", protect, getRankingByWeek);
 
 // Route xem chi tiết: /api/scores/:id
 router.get("/:id", protect, getScoreDetail);
+
+router.delete("/:id", protect, deleteScore);
 
 export default router;
