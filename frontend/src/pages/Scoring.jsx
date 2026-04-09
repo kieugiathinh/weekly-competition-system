@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import * as XLSX from "xlsx";
 import {
   CheckCircle2,
   Clock,
@@ -12,6 +13,7 @@ import {
   Lock,
   Unlock,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { classApi } from "../api/classApi";
@@ -203,6 +205,44 @@ const Scoring = () => {
     }
   };
 
+  // --- XUẤT EXCEL BẢNG XẾP HẠNG ---
+  const handleExportExcel = () => {
+    if (displayClasses.length === 0) {
+      toast.warning("Không có dữ liệu để xuất!");
+      return;
+    }
+
+    // 1. Map dữ liệu từ UI sang định dạng chuẩn của Excel
+    const excelData = displayClasses.map((cls, index) => ({
+      Hạng: cls.scoreRecord ? index + 1 : "Chưa xếp hạng",
+      "Tên Lớp": cls.name,
+      Khối: `Khối ${cls.grade}`,
+      "Tổng Điểm": cls.scoreRecord ? cls.scoreRecord.totalScore : "Chưa chấm",
+      "Trạng Thái": cls.scoreRecord ? "Đã chấm" : "Chờ chấm",
+    }));
+
+    // 2. Tạo một Workbook và Worksheet
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Bảng Xếp Hạng");
+
+    // 3. Chỉnh độ rộng cột cho đẹp
+    worksheet["!cols"] = [
+      { wch: 15 }, // Hạng
+      { wch: 20 }, // Tên Lớp
+      { wch: 15 }, // Khối
+      { wch: 15 }, // Tổng Điểm
+      { wch: 15 }, // Trạng Thái
+    ];
+
+    // 4. Lấy tên file tự động theo Tuần hiện tại
+    const fileName = `Bang_Xep_Hang_${currentSelectedWeek?.name.replace(/\s+/g, "_") || "Tuan"}.xlsx`;
+
+    // 5. Tự động tải file xuống
+    XLSX.writeFile(workbook, fileName);
+    toast.success("Đã xuất file Excel thành công!");
+  };
+
   const renderCriterionRow = (c) => {
     const qty = scoreDetails[c._id] || 0;
     return (
@@ -270,7 +310,7 @@ const Scoring = () => {
 
   return (
     <div className="font-sans">
-      {/* 1. HEADER & DROPDOWN LỌC TUẦN */}
+      {/* 1. HEADER & DROPDOWN LỌC TUẦN KÈM NÚT XUẤT EXCEL */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -282,14 +322,14 @@ const Scoring = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
             <span className="text-sm font-medium text-gray-700 hidden sm:block">
               Đang xem:
             </span>
             <select
               value={selectedWeekId}
               onChange={(e) => setSelectedWeekId(e.target.value)}
-              className="w-full sm:w-64 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              className="w-full sm:w-auto px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               {weeksList.map((w) => (
                 <option key={w._id} value={w._id}>
@@ -297,6 +337,15 @@ const Scoring = () => {
                 </option>
               ))}
             </select>
+
+            {/* NÚT XUẤT EXCEL */}
+            <button
+              onClick={handleExportExcel}
+              className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors font-bold shadow-sm w-full sm:w-auto justify-center"
+            >
+              <Download size={18} />
+              Xuất Excel
+            </button>
           </div>
         </div>
       </div>
