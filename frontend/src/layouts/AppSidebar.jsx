@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom"; // Đổi thành react-router-dom
+import { Link, useLocation } from "react-router-dom";
 import { useSidebar } from "../context/SidebarContext";
-// Import Icon từ Lucide cực kỳ gọn gàng
 import {
   LayoutDashboard,
   PenTool,
@@ -12,6 +11,10 @@ import {
   ShieldCheck,
   MoreHorizontal,
 } from "lucide-react";
+
+// IMPORT LOGO TỪ THƯ MỤC ASSETS
+// (Bạn có thể đổi tên file logo.png, logo.jpg, logo.svg... cho khớp với file thật của bạn)
+import logo from "../assets/logothcstranphu.jpg";
 
 // MENU ĐƯỢC TÙY BIẾN CHO DỰ ÁN CỦA BẠN
 const navItems = [
@@ -46,12 +49,28 @@ const AppSidebar = () => {
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* KHU VỰC LOGO */}
-      <div
-        className={`py-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}
-      >
-        <Link to="/" className="text-2xl font-bold text-blue-600">
-          {isExpanded || isHovered || isMobileOpen ? "ThiĐuaTHCS" : "TĐ"}
+      {/* KHU VỰC LOGO & TÊN ỨNG DỤNG */}
+      <div className="py-6 flex justify-center border-b border-gray-100 mb-4">
+        <Link to="/" className="flex flex-col items-center gap-2">
+          {/* Logo bo tròn */}
+          <img
+            src={logo}
+            alt="Logo"
+            className={`rounded-full object-cover border-2 border-blue-100 shadow-sm transition-all duration-300
+              ${isExpanded || isHovered || isMobileOpen ? "w-16 h-16" : "w-12 h-12"}`}
+          />
+
+          {/* Tên ứng dụng (Chỉ hiện khi mở rộng Sidebar) */}
+          {(isExpanded || isHovered || isMobileOpen) && (
+            <div className="text-center mt-1 animate-in fade-in duration-300">
+              <span className="block text-[13px] font-extrabold text-blue-700 uppercase tracking-wide leading-snug">
+                Ứng dụng quản lý
+              </span>
+              <span className="block text-xs font-semibold text-blue-500 uppercase mt-0.5">
+                Thi đua tuần
+              </span>
+            </div>
+          )}
         </Link>
       </div>
 
@@ -78,7 +97,7 @@ const AppSidebar = () => {
                       className={`flex items-center gap-3 px-3 py-2.5 font-medium rounded-lg transition-colors group
                         ${
                           isActive(nav.path)
-                            ? "bg-blue-50 text-blue-600" // Trạng thái Active: Nền xanh nhạt, chữ xanh dương
+                            ? "bg-blue-50 text-blue-600" // Trạng thái Active
                             : "text-gray-600 hover:bg-gray-100 hover:text-blue-600" // Trạng thái Hover
                         }
                         ${!isExpanded && !isHovered ? "lg:justify-center" : "lg:justify-start"}
