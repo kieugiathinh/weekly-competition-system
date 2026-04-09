@@ -3,137 +3,141 @@ import { SchoolYear } from "../models/schoolYearModel.js";
 
 // 1. Tạo tuần mới
 const createWeekService = async (data) => {
-  const { name, startDate, endDate, schoolYearId } = data;
-  let { weekNumber } = data;
+  const { name, startDate, endDate, schoolYearId, isLocked } = data;
 
-  // Kiểm tra năm học
+  // Kiểm tra năm học có tồn tại không
   const yearExists = await SchoolYear.findById(schoolYearId);
   if (!yearExists) throw new Error("Năm học không tồn tại");
 
-  // Logic validate Ngày tháng
-  if (new Date(startDate) >= new Date(endDate)) {
-    throw new Error("Ngày kết thúc phải nằm sau ngày bắt đầu");
+  // Kiểm tra logic thời gian cơ bản
+  if (new Date(startDate) > new Date(endDate)) {
+    throw new Error("Ngày bắt đầu không được lớn hơn ngày kết thúc");
   }
 
-  // LOGIC TỰ ĐỘNG TÍNH SỐ THỨ TỰ TUẦN
-  if (!weekNumber) {
-    const lastWeek = await Week.findOne({ schoolYearId }).sort({
-      weekNumber: -1,
-    });
-    weekNumber = lastWeek ? lastWeek.weekNumber + 1 : 1;
-    data.weekNumber = weekNumber;
-  }
+  // Kiểm tra trùng Tên tuần trong cùng 1 năm học
+  const nameExists = await Week.findOne({ name, schoolYearId });
+  if (nameExists)
+    throw new Error(`Tuần "${name}" đã tồn tại trong năm học này`);
 
-  // Kiểm tra trùng lặp
-  const weekExists = await Week.findOne({
-    schoolYearId,
-    $or: [{ name }, { weekNumber }],
+  // LOGIC QUAN TRỌNG: KIỂM TRA TRÙNG LỊCH (OVERLAPPING)
+  const overlappingWeek = await Week.findOne({
+    schoolYearId: schoolYearId,
+    startDate: { $lte: endDate }, // Ngày BĐ (cũ) <= Ngày KT (mới)
+    endDate: { $gte: startDate }, // Ngày KT (cũ) >= Ngày BĐ (mới)
   });
 
-  if (weekExists)
-    throw new Error(
-      "Tên tuần hoặc Số thứ tự tuần đã tồn tại trong năm học này",
+  if (overlappingWeek) {
+    const formattedStart = new Date(
+      overlappingWeek.startDate,
+    ).toLocaleDateString("vi-VN");
+    const formattedEnd = new Date(overlappingWeek.endDate).toLocaleDateString(
+      "vi-VN",
     );
-
-  // LOGIC ĐỘC QUYỀN TRẠNG THÁI MỞ:
-  // Nếu tuần mới được tạo ra không bị khóa (mặc định là Mở)
-  if (data.isLocked !== true) {
-    // Tự động KHÓA tất cả các tuần cũ trong cùng một năm học
-    await Week.updateMany({ schoolYearId }, { isLocked: true });
+    throw new Error(
+      `Thời gian bị trùng lặp với ${overlappingWeek.name} (từ ${formattedStart} đến ${formattedEnd})`,
+    );
   }
 
   const newWeek = await Week.create(data);
   return newWeek;
 };
 
-// 2. Lấy danh sách tuần
+// 2. Lấy danh sách Tuần
 const getAllWeeksService = async (query) => {
   const filter = {};
-  if (query.schoolYearId) filter.schoolYearId = query.schoolYearId;
+  if (query.schoolYearId) {
+    filter.schoolYearId = query.schoolYearId;
+  }
 
+  // Lấy danh sách và sort theo startDate tăng dần
   const weeks = await Week.find(filter)
     .populate("schoolYearId", "name isCurrent")
-    .sort({ weekNumber: 1 });
+    .sort({ startDate: 1 });
 
   return weeks;
 };
 
-// 3. Lấy chi tiết
+// 3. Lấy chi tiết 1 tuần
 const getWeekByIdService = async (id) => {
-  const week = await Week.findById(id).populate(
+  const weekData = await Week.findById(id).populate(
     "schoolYearId",
     "name isCurrent",
   );
-  if (!week) throw new Error("Không tìm thấy tuần thi đua");
-  return week;
+  if (!weekData) throw new Error("Không tìm thấy Tuần thi đua");
+  return weekData;
 };
 
-// 4. Cập nhật tuần
+// 4. Cập nhật Tuần
 const updateWeekService = async (id, updateData) => {
-  const week = await Week.findById(id);
-  if (!week) throw new Error("Không tìm thấy tuần thi đua");
+  const weekData = await Week.findById(id);
+  if (!weekData) throw new Error("Không tìm thấy Tuần thi đua");
 
-  const { name, weekNumber, startDate, endDate, isLocked } = updateData;
+  const checkName = updateData.name || weekData.name;
+  const checkStartDate = updateData.startDate || weekData.startDate;
+  const checkEndDate = updateData.endDate || weekData.endDate;
+  const checkYearId = updateData.schoolYearId || weekData.schoolYearId;
 
-  // Validate ngày tháng
-  if (startDate && endDate) {
-    if (new Date(startDate) >= new Date(endDate)) {
-      throw new Error("Ngày kết thúc phải nằm sau ngày bắt đầu");
-    }
-  } else if (startDate) {
-    if (new Date(startDate) >= new Date(week.endDate))
-      throw new Error(
-        "Ngày bắt đầu không được vượt qua ngày kết thúc hiện tại",
-      );
-  } else if (endDate) {
-    if (new Date(week.startDate) >= new Date(endDate))
-      throw new Error("Ngày kết thúc phải sau ngày bắt đầu hiện tại");
+  // Kiểm tra logic thời gian cơ bản
+  if (new Date(checkStartDate) > new Date(checkEndDate)) {
+    throw new Error("Ngày bắt đầu không được lớn hơn ngày kết thúc");
   }
 
-  // Check trùng lặp
-  if (
-    (name && name !== week.name) ||
-    (weekNumber && weekNumber !== week.weekNumber)
-  ) {
-    const checkName = name || week.name;
-    const checkNumber = weekNumber || week.weekNumber;
-
-    const weekExists = await Week.findOne({
-      schoolYearId: week.schoolYearId,
+  // Kiểm tra trùng Tên
+  if (updateData.name && updateData.name !== weekData.name) {
+    const nameExists = await Week.findOne({
+      name: checkName,
+      schoolYearId: checkYearId,
       _id: { $ne: id },
-      $or: [{ name: checkName }, { weekNumber: checkNumber }],
+    });
+    if (nameExists)
+      throw new Error(`Tuần "${checkName}" đã tồn tại trong năm học này`);
+  }
+
+  // LOGIC QUAN TRỌNG: KIỂM TRA TRÙNG LỊCH KHI SỬA (Bỏ qua chính nó)
+  if (updateData.startDate || updateData.endDate) {
+    const overlappingWeek = await Week.findOne({
+      _id: { $ne: id }, // Không tự so sánh với chính mình
+      schoolYearId: checkYearId,
+      startDate: { $lte: checkEndDate },
+      endDate: { $gte: checkStartDate },
     });
 
-    if (weekExists) throw new Error("Tên tuần hoặc Số thứ tự tuần đã bị trùng");
+    if (overlappingWeek) {
+      const formattedStart = new Date(
+        overlappingWeek.startDate,
+      ).toLocaleDateString("vi-VN");
+      const formattedEnd = new Date(overlappingWeek.endDate).toLocaleDateString(
+        "vi-VN",
+      );
+      throw new Error(
+        `Thời gian bị trùng lặp với ${overlappingWeek.name} (từ ${formattedStart} đến ${formattedEnd})`,
+      );
+    }
   }
 
-  // LOGIC ĐỘC QUYỀN TRẠNG THÁI MỞ (Khi Update):
-  // Nếu người dùng đang MỞ KHÓA tuần này (từ true chuyển thành false)
-  if (isLocked === false && week.isLocked === true) {
-    // Tự động Khóa tất cả các tuần khác trong cùng năm học
-    await Week.updateMany(
-      { schoolYearId: week.schoolYearId, _id: { $ne: id } },
-      { isLocked: true },
-    );
+  // Tiến hành lưu
+  weekData.name = checkName;
+  weekData.startDate = checkStartDate;
+  weekData.endDate = checkEndDate;
+  weekData.schoolYearId = checkYearId;
+
+  if (updateData.isLocked !== undefined) {
+    weekData.isLocked = updateData.isLocked;
   }
 
-  // Cập nhật dữ liệu
-  week.name = name || week.name;
-  if (weekNumber !== undefined) week.weekNumber = weekNumber;
-  if (startDate) week.startDate = startDate;
-  if (endDate) week.endDate = endDate;
-  if (isLocked !== undefined) week.isLocked = isLocked;
-
-  const updatedWeek = await week.save();
+  const updatedWeek = await weekData.save();
   return updatedWeek;
 };
 
 // 5. Xóa tuần
 const deleteWeekService = async (id) => {
-  const week = await Week.findById(id);
-  if (!week) throw new Error("Không tìm thấy tuần thi đua");
-  await week.deleteOne();
-  return { message: "Đã xóa tuần thi đua thành công" };
+  const weekData = await Week.findById(id);
+  if (!weekData) throw new Error("Không tìm thấy Tuần thi đua");
+
+  // TODO: Tương lai nếu tuần này đã có điểm (liên kết bảng score), chặn xóa tại đây.
+
+  await weekData.deleteOne();
+  return { message: "Đã xóa Tuần thi đua thành công" };
 };
 
 export {

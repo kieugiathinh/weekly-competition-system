@@ -20,7 +20,7 @@ import { classApi } from "../api/classApi";
 import { weekApi } from "../api/weekApi";
 import { criterionApi } from "../api/criterionApi";
 import { weeklyScoreApi } from "../api/weeklyScoreApi";
-import { schoolYearApi } from "../api/schoolYearApi"; // Import API Năm học
+import { schoolYearApi } from "../api/schoolYearApi";
 
 const Scoring = () => {
   // --- STATES BỘ LỌC NĂM & TUẦN ---
@@ -40,11 +40,10 @@ const Scoring = () => {
   const [selectedClass, setSelectedClass] = useState(null);
   const [scoreDetails, setScoreDetails] = useState({});
 
-  // Trạng thái Chỉ xem
   const currentSelectedWeek = weeksList.find((w) => w._id === selectedWeekId);
   const isReadOnly = currentSelectedWeek?.isLocked || false;
 
-  // 1. TẢI NĂM HỌC VÀ TIÊU CHÍ (Chạy 1 lần khi vào trang)
+  // 1. TẢI NĂM HỌC VÀ TIÊU CHÍ
   useEffect(() => {
     const fetchInitData = async () => {
       try {
@@ -72,7 +71,7 @@ const Scoring = () => {
     fetchInitData();
   }, []);
 
-  // 2. TẢI LỚP VÀ TUẦN (Mỗi khi đổi Năm học)
+  // 2. TẢI LỚP VÀ TUẦN (Có lọc Tuần Tương lai)
   useEffect(() => {
     const fetchYearData = async () => {
       if (!selectedYearId) return;
@@ -80,16 +79,24 @@ const Scoring = () => {
         setLoading(true);
         const [classesData, weeksData] = await Promise.all([
           classApi.getAll({ schoolYearId: selectedYearId }),
-          weekApi.getAll({ schoolYearId: selectedYearId }), // Chỉ lấy tuần của năm này
+          weekApi.getAll({ schoolYearId: selectedYearId }),
         ]);
 
-        setBaseClasses(classesData);
-        setWeeksList(weeksData);
+        // LOGIC LỌC TUẦN: Chỉ lấy những tuần đã/đang diễn ra (startDate <= hôm nay)
+        const today = new Date();
+        today.setHours(23, 59, 59, 999); // Tính đến cuối ngày hôm nay
 
-        if (weeksData.length > 0) {
-          const openWeek = weeksData.find((w) => !w.isLocked);
+        const visibleWeeks = weeksData.filter(
+          (w) => new Date(w.startDate) <= today,
+        );
+
+        setBaseClasses(classesData);
+        setWeeksList(visibleWeeks); // Chỉ lưu danh sách tuần hợp lệ vào State
+
+        if (visibleWeeks.length > 0) {
+          const openWeek = visibleWeeks.find((w) => !w.isLocked);
           setSelectedWeekId(
-            openWeek ? openWeek._id : weeksData[weeksData.length - 1]._id,
+            openWeek ? openWeek._id : visibleWeeks[visibleWeeks.length - 1]._id,
           );
         } else {
           setSelectedWeekId("");
@@ -104,10 +111,9 @@ const Scoring = () => {
     fetchYearData();
   }, [selectedYearId]);
 
-  // 3. TẢI BẢNG ĐIỂM (Mỗi khi đổi Tuần)
+  // 3. TẢI BẢNG ĐIỂM
   const fetchScoresForWeek = async (weekId) => {
     if (!weekId || baseClasses.length === 0) {
-      // Nếu năm học không có tuần nào, reset bảng điểm
       setDisplayClasses(
         baseClasses.map((cls) => ({ ...cls, scoreRecord: null })),
       );
@@ -309,7 +315,7 @@ const Scoring = () => {
 
   return (
     <div className="font-sans space-y-6">
-      {/* 1. HEADER & BỘ LỌC ĐA CẤP (NĂM -> TUẦN) */}
+      {/* HEADER & BỘ LỌC ĐA CẤP */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
           <div>
@@ -352,7 +358,7 @@ const Scoring = () => {
                 className="w-full sm:w-auto px-4 py-2.5 bg-blue-50/50 border border-blue-200 rounded-lg text-blue-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
               >
                 {weeksList.length === 0 ? (
-                  <option value="">Chưa có dữ liệu Tuần</option>
+                  <option value="">Không có Tuần khả dụng</option>
                 ) : (
                   weeksList.map((w) => (
                     <option key={w._id} value={w._id}>
@@ -375,15 +381,16 @@ const Scoring = () => {
         </div>
       </div>
 
-      {/* CẢNH BÁO */}
+      {/* CẢNH BÁO NẾU KHÔNG CÓ TUẦN HỢP LỆ */}
       {weeksList.length === 0 ? (
         <div className="bg-white p-8 rounded-xl border border-gray-200 text-center shadow-sm">
           <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
           <h2 className="text-xl font-bold text-gray-800 mb-2">
-            Chưa có Tuần nào cho năm học này!
+            Chưa có Tuần thi đua nào diễn ra!
           </h2>
           <p className="text-gray-500">
-            Vui lòng tạo Tuần thi đua bên mục Quản lý Tuần trước khi chấm điểm.
+            Hiện tại năm học này chưa có Tuần nào bắt đầu. Hãy quay lại sau hoặc
+            kiểm tra lịch bên mục Quản lý Tuần.
           </p>
         </div>
       ) : isReadOnly ? (

@@ -24,7 +24,7 @@ import { classApi } from "../api/classApi";
 import { weekApi } from "../api/weekApi";
 import { criterionApi } from "../api/criterionApi";
 import { weeklyScoreApi } from "../api/weeklyScoreApi";
-import { schoolYearApi } from "../api/schoolYearApi"; // Thêm API Năm học
+import { schoolYearApi } from "../api/schoolYearApi";
 
 const COLORS = [
   "#ef4444",
@@ -36,18 +36,15 @@ const COLORS = [
 ];
 
 const Dashboard = () => {
-  // --- STATES BỘ LỌC ĐA CẤP ---
   const [schoolYears, setSchoolYears] = useState([]);
   const [selectedYearId, setSelectedYearId] = useState("");
   const [weeksList, setWeeksList] = useState([]);
   const [selectedWeekId, setSelectedWeekId] = useState("");
 
-  // --- STATES DỮ LIỆU NỀN ---
   const [loading, setLoading] = useState(true);
   const [baseClasses, setBaseClasses] = useState([]);
   const [baseCriteria, setBaseCriteria] = useState([]);
 
-  // --- STATES HIỂN THỊ BIỂU ĐỒ ---
   const [stats, setStats] = useState({
     totalClasses: 0,
     totalCriteria: 0,
@@ -58,7 +55,7 @@ const Dashboard = () => {
   const [unscoredClasses, setUnscoredClasses] = useState([]);
   const [violationData, setViolationData] = useState([]);
 
-  // 1. FETCH NĂM HỌC VÀ TIÊU CHÍ (Chạy 1 lần)
+  // 1. FETCH NĂM HỌC VÀ TIÊU CHÍ
   useEffect(() => {
     const fetchInitData = async () => {
       try {
@@ -83,7 +80,7 @@ const Dashboard = () => {
     fetchInitData();
   }, []);
 
-  // 2. FETCH LỚP VÀ TUẦN THEO NĂM HỌC
+  // 2. FETCH LỚP VÀ TUẦN (Có lọc Tuần Tương lai)
   useEffect(() => {
     const fetchYearData = async () => {
       if (!selectedYearId) return;
@@ -91,20 +88,27 @@ const Dashboard = () => {
       try {
         setLoading(true);
         const [classesData, weeksData] = await Promise.all([
-          classApi.getAll({ schoolYearId: selectedYearId }), // Lớp của năm này
-          weekApi.getAll({ schoolYearId: selectedYearId }), // Tuần của năm này
+          classApi.getAll({ schoolYearId: selectedYearId }),
+          weekApi.getAll({ schoolYearId: selectedYearId }),
         ]);
 
-        setBaseClasses(classesData);
-        setWeeksList(weeksData);
+        // LOGIC LỌC TUẦN: Chỉ lấy những tuần đã/đang diễn ra (startDate <= hôm nay)
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
 
-        if (weeksData.length > 0) {
-          const openWeek = weeksData.find((w) => !w.isLocked);
+        const visibleWeeks = weeksData.filter(
+          (w) => new Date(w.startDate) <= today,
+        );
+
+        setBaseClasses(classesData);
+        setWeeksList(visibleWeeks); // Chỉ lưu danh sách tuần hợp lệ
+
+        if (visibleWeeks.length > 0) {
+          const openWeek = visibleWeeks.find((w) => !w.isLocked);
           setSelectedWeekId(
-            openWeek ? openWeek._id : weeksData[weeksData.length - 1]._id,
+            openWeek ? openWeek._id : visibleWeeks[visibleWeeks.length - 1]._id,
           );
         } else {
-          // Reset nếu năm này không có tuần nào
           setSelectedWeekId("");
           setStats((prev) => ({
             ...prev,
@@ -126,7 +130,7 @@ const Dashboard = () => {
     fetchYearData();
   }, [selectedYearId]);
 
-  // 3. FETCH BẢNG ĐIỂM THEO TUẦN ĐƯỢC CHỌN
+  // 3. FETCH BẢNG ĐIỂM
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (!selectedWeekId || baseClasses.length === 0) return;
@@ -134,25 +138,21 @@ const Dashboard = () => {
       try {
         const ranking = await weeklyScoreApi.getRankingByWeek(selectedWeekId);
 
-        // 3.1 Cập nhật Thẻ thống kê
         setStats({
           totalClasses: baseClasses.length,
           totalCriteria: baseCriteria.filter((c) => c.isActive).length,
           scoredClasses: ranking.length,
         });
 
-        // 3.2 Phân loại lớp Chưa chấm (Từ danh sách baseClasses của năm hiện tại)
         const scoredClassIds = ranking.map((r) => r.classId._id);
         const unscored = baseClasses.filter(
           (c) => !scoredClassIds.includes(c._id),
         );
         setUnscoredClasses(unscored);
 
-        // 3.3 Lấy Top 5 Cao nhất và Top 5 Thấp nhất
         setTopClasses(ranking.slice(0, 5));
         setBottomClasses([...ranking].reverse().slice(0, 5));
 
-        // 3.4 Thống kê Lỗi vi phạm phổ biến
         const violationCount = {};
         ranking.forEach((scoreRecord) => {
           scoreRecord.details.forEach((detail) => {
@@ -237,7 +237,7 @@ const Dashboard = () => {
                 className="w-full sm:w-auto px-4 py-2.5 bg-blue-50/50 border border-blue-200 rounded-lg text-blue-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
               >
                 {weeksList.length === 0 ? (
-                  <option value="">Chưa có dữ liệu Tuần</option>
+                  <option value="">Không có Tuần khả dụng</option>
                 ) : (
                   weeksList.map((w) => (
                     <option key={w._id} value={w._id}>
@@ -256,16 +256,16 @@ const Dashboard = () => {
         <div className="bg-white p-12 rounded-xl border border-gray-200 text-center shadow-sm">
           <AlertTriangle className="mx-auto h-16 w-16 text-yellow-500 mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            Năm học này chưa có dữ liệu Tuần
+            Chưa có Tuần thi đua nào diễn ra!
           </h2>
           <p className="text-gray-500">
-            Hãy chuyển sang năm học cũ để xem lịch sử, hoặc tạo Tuần mới cho năm
-            hiện tại.
+            Hiện tại năm học này chưa có Tuần nào bắt đầu. Hãy quay lại sau hoặc
+            kiểm tra lịch bên mục Quản lý Tuần.
           </p>
         </div>
       ) : (
         <>
-          {/* 2. TOP CARDS (4 Thẻ thống kê) */}
+          {/* 2. TOP CARDS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
@@ -327,7 +327,7 @@ const Dashboard = () => {
 
           {/* 3. KHU VỰC BIỂU ĐỒ */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
-            {/* Biểu đồ Cột: Top 5 Lớp Xuất Sắc */}
+            {/* Biểu đồ Cột */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm lg:col-span-2">
               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-6">
                 <Trophy className="text-yellow-500" size={20} /> Vinh danh Top 5
@@ -382,7 +382,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Biểu đồ Tròn: Tỉ lệ Vi Phạm */}
+            {/* Biểu đồ Tròn */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-2">
                 <AlertCircle className="text-red-500" size={20} /> Lỗi vi phạm
@@ -423,7 +423,6 @@ const Dashboard = () => {
                   </div>
                 )}
               </div>
-              {/* Chú thích Biểu đồ tròn */}
               <div className="mt-2 flex flex-col gap-2 h-20 overflow-y-auto no-scrollbar">
                 {violationData.map((item, index) => (
                   <div
@@ -455,7 +454,7 @@ const Dashboard = () => {
 
           {/* 4. KHU VỰC DANH SÁCH CHÚ Ý */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
-            {/* Lớp cần nhắc nhở (Bottom 5) */}
+            {/* Lớp cần nhắc nhở */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <h3 className="text-lg font-bold text-gray-800 mb-4 border-b border-gray-100 pb-3">
                 Top 5 Lớp Điểm Thấp Nhất (Cần đôn đốc)
