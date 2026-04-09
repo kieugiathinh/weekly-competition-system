@@ -19,18 +19,15 @@ const createClassService = async (data) => {
 
 // 2. Lấy danh sách lớp học (Có hỗ trợ Query Filter)
 const getAllClassesService = async (query) => {
-  // query có thể là: { schoolYearId: '123...', grade: 6 }
   const filter = {};
 
   if (query.schoolYearId) {
     filter.schoolYearId = query.schoolYearId;
   }
   if (query.grade) {
-    filter.grade = query.grade; // Lọc theo khối nếu có truyền vào
+    filter.grade = query.grade;
   }
 
-  // Lấy dữ liệu, populate để lấy thêm field 'name' và 'isCurrent' của bảng SchoolYear
-  // Sort theo Khối tăng dần (6->9), sau đó sort theo Tên lớp
   const classes = await Class.find(filter)
     .populate("schoolYearId", "name isCurrent")
     .sort({ grade: 1, name: 1 });
@@ -55,7 +52,6 @@ const updateClassService = async (id, updateData) => {
 
   const { name, grade, schoolYearId } = updateData;
 
-  // Nếu người dùng đổi Tên lớp HOẶC đổi Năm học -> Phải check trùng lặp
   if (
     (name && name !== classData.name) ||
     (schoolYearId &&
@@ -67,14 +63,13 @@ const updateClassService = async (id, updateData) => {
     const classExists = await Class.findOne({
       name: checkName,
       schoolYearId: checkYearId,
-      _id: { $ne: id }, // Loại trừ chính nó ra
+      _id: { $ne: id },
     });
 
     if (classExists)
       throw new Error(`Lớp ${checkName} đã tồn tại trong năm học này`);
   }
 
-  // Cập nhật dữ liệu
   classData.name = name || classData.name;
   classData.grade = grade || classData.grade;
   classData.schoolYearId = schoolYearId || classData.schoolYearId;
@@ -88,10 +83,41 @@ const deleteClassService = async (id) => {
   const classData = await Class.findById(id);
   if (!classData) throw new Error("Không tìm thấy lớp học");
 
-  // TODO: Tương lai sẽ thêm logic check xem lớp đã có bảng điểm chưa ở đây
-
   await classData.deleteOne();
   return { message: "Đã xóa lớp học thành công" };
+};
+
+// 6. Sao chép lớp từ năm cũ sang năm mới
+const cloneClassesService = async (fromYearId, toYearId) => {
+  // Kiểm tra xem năm học đích (Năm mới) đã có lớp nào chưa
+  const existingClasses = await Class.countDocuments({
+    schoolYearId: toYearId,
+  });
+  if (existingClasses > 0) {
+    throw new Error(
+      "Năm học mới này đã có danh sách lớp. Không thể sao chép đè lên được.",
+    );
+  }
+
+  // Lấy danh sách lớp từ năm cũ
+  const oldClasses = await Class.find({ schoolYearId: fromYearId });
+  if (oldClasses.length === 0) {
+    throw new Error("Năm học cũ không có danh sách lớp nào để sao chép.");
+  }
+
+  // Chuẩn bị mảng dữ liệu mới
+  const newClassesData = oldClasses.map((cls) => ({
+    name: cls.name,
+    grade: cls.grade,
+    schoolYearId: toYearId,
+  }));
+
+  // Đẩy 1 lần toàn bộ vào Database
+  await Class.insertMany(newClassesData);
+
+  return {
+    message: `Đã sao chép thành công ${newClassesData.length} lớp sang năm học mới.`,
+  };
 };
 
 export {
@@ -100,4 +126,5 @@ export {
   getClassByIdService,
   updateClassService,
   deleteClassService,
+  cloneClassesService,
 };

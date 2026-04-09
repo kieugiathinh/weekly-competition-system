@@ -4,6 +4,7 @@ import {
   getClassByIdService,
   updateClassService,
   deleteClassService,
+  cloneClassesService,
 } from "../services/classService.js";
 
 // Tạo lớp mới
@@ -16,11 +17,9 @@ const createClass = async (req, res) => {
   }
 };
 
-// Lấy danh sách lớp (Có hỗ trợ query params để lọc)
+// Lấy danh sách lớp
 const getClasses = async (req, res) => {
   try {
-    // req.query sẽ tự động lấy các tham số trên URL
-    // VD: /api/classes?schoolYearId=abc&grade=6 -> req.query = { schoolYearId: 'abc', grade: '6' }
     const classes = await getAllClassesService(req.query);
     res.json(classes);
   } catch (error) {
@@ -58,4 +57,28 @@ const deleteClass = async (req, res) => {
   }
 };
 
-export { createClass, getClasses, getClassById, updateClass, deleteClass };
+// Sao chép lớp học
+const cloneClasses = async (req, res) => {
+  try {
+    const { fromYearId, toYearId } = req.body;
+    if (!fromYearId || !toYearId) {
+      return res
+        .status(400)
+        .json({ message: "Thiếu ID của năm học cũ hoặc năm học mới" });
+    }
+
+    const result = await cloneClassesService(fromYearId, toYearId);
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+export {
+  createClass,
+  getClasses,
+  getClassById,
+  updateClass,
+  deleteClass,
+  cloneClasses,
+};

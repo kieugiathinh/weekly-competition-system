@@ -5,10 +5,13 @@ import {
   getClassById,
   updateClass,
   deleteClass,
+  cloneClasses,
 } from "../controllers/classController.js";
 import { protect, admin } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
+
+router.post("/clone", protect, admin, cloneClasses);
 
 router
   .route("/")

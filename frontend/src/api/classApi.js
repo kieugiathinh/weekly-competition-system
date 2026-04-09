@@ -20,4 +20,9 @@ export const classApi = {
     const response = await axiosInstance.delete(`/classes/${id}`);
     return response.data;
   },
+
+  clone: async (data) => {
+    const response = await axiosInstance.post("/classes/clone", data);
+    return response.data;
+  },
 };
