@@ -8,6 +8,7 @@ import {
   Minus,
   AlertCircle,
   X,
+  Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { classApi } from "../api/classApi";
@@ -16,24 +17,18 @@ import { criterionApi } from "../api/criterionApi";
 import { weeklyScoreApi } from "../api/weeklyScoreApi";
 
 const Scoring = () => {
-  // --- STATES ---
   const [activeWeek, setActiveWeek] = useState(null);
   const [classesList, setClassesList] = useState([]);
   const [criteria, setCriteria] = useState({ bonus: [], penalty: [] });
   const [loading, setLoading] = useState(true);
 
-  // Modal & Form States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
-  // details sẽ lưu dưới dạng Object: { [criterionId]: quantity }
   const [scoreDetails, setScoreDetails] = useState({});
 
-  // --- FETCH DATA ---
   const fetchAllData = async () => {
     try {
       setLoading(true);
-
-      // 1. Lấy tất cả Tuần, tìm Tuần đang MỞ (isLocked: false) và của Năm hiện tại
       const weeksData = await weekApi.getAll();
       const currentOpenWeek = weeksData.find(
         (w) => !w.isLocked && w.schoolYearId?.isCurrent,
@@ -42,35 +37,45 @@ const Scoring = () => {
       if (!currentOpenWeek) {
         setActiveWeek(null);
         setLoading(false);
-        return; // Dừng lại nếu không có tuần nào mở
+        return;
       }
       setActiveWeek(currentOpenWeek);
 
-      // 2. Lấy Danh sách Lớp, Tiêu chí (chỉ lấy cái đang Active), và Bảng điểm của Tuần đang mở
       const [classesData, criteriaData, rankingData] = await Promise.all([
-        classApi.getAll({ schoolYearId: currentOpenWeek.schoolYearId._id }), // Lấy lớp của năm hiện tại
+        classApi.getAll({ schoolYearId: currentOpenWeek.schoolYearId._id }),
         criterionApi.getAll({ isActive: true }),
         weeklyScoreApi.getRankingByWeek(currentOpenWeek._id),
       ]);
 
-      // Phân loại Tiêu chí thành 2 cột Cộng / Trừ
       setCriteria({
         bonus: criteriaData.filter((c) => c.type === "bonus"),
         penalty: criteriaData.filter((c) => c.type === "penalty"),
       });
 
-      // 3. THUẬT TOÁN MERGE: Gắn điểm vào Lớp
+      // Gắn điểm vào Lớp
       const mergedClasses = classesData.map((cls) => {
         const classScore = rankingData.find(
           (score) => score.classId._id === cls._id,
         );
         return {
           ...cls,
-          scoreRecord: classScore || null, // Nếu có classScore -> Đã chấm. Nếu null -> Chưa chấm
+          scoreRecord: classScore || null,
         };
       });
 
-      setClassesList(mergedClasses);
+      // THUẬT TOÁN SORT:
+      // 1. Lớp nào có điểm xếp trên, chưa có điểm xếp dưới
+      // 2. Nếu cùng có điểm, lớp nào điểm cao hơn xếp trên
+      const sortedClasses = mergedClasses.sort((a, b) => {
+        if (a.scoreRecord && b.scoreRecord) {
+          return b.scoreRecord.totalScore - a.scoreRecord.totalScore; // Giảm dần
+        }
+        if (a.scoreRecord && !b.scoreRecord) return -1; // a lên trên
+        if (!a.scoreRecord && b.scoreRecord) return 1; // b lên trên
+        return 0;
+      });
+
+      setClassesList(sortedClasses);
     } catch (error) {
       toast.error("Lỗi khi tải dữ liệu chấm điểm");
     } finally {
@@ -82,11 +87,8 @@ const Scoring = () => {
     fetchAllData();
   }, []);
 
-  // --- ACTIONS ---
   const openScoringModal = (cls) => {
     setSelectedClass(cls);
-
-    // Nếu lớp này ĐÃ CHẤM, load lại số lượng lỗi cũ vào Form
     if (cls.scoreRecord) {
       const existingDetails = {};
       cls.scoreRecord.details.forEach((item) => {
@@ -94,10 +96,8 @@ const Scoring = () => {
       });
       setScoreDetails(existingDetails);
     } else {
-      // Chưa chấm thì Form trống
       setScoreDetails({});
     }
-
     setIsModalOpen(true);
   };
 
@@ -107,15 +107,14 @@ const Scoring = () => {
     setScoreDetails({});
   };
 
-  // Tăng/Giảm số lượng lỗi
+  // Click +/-
   const updateQuantity = (criterionId, amount) => {
     setScoreDetails((prev) => {
       const currentQty = prev[criterionId] || 0;
-      const newQty = Math.max(0, currentQty + amount); // Không cho âm
-
+      const newQty = Math.max(0, currentQty + amount);
       const newDetails = { ...prev };
       if (newQty === 0) {
-        delete newDetails[criterionId]; // Bằng 0 thì xóa luôn khỏi payload
+        delete newDetails[criterionId];
       } else {
         newDetails[criterionId] = newQty;
       }
@@ -123,10 +122,22 @@ const Scoring = () => {
     });
   };
 
-  // LƯU ĐIỂM
+  // Gõ phím trực tiếp
+  const handleManualInput = (criterionId, value) => {
+    setScoreDetails((prev) => {
+      const newDetails = { ...prev };
+      // Nếu user xóa rỗng hoặc nhập số âm/bằng 0 -> Hủy bỏ tiêu chí đó
+      if (value === "" || isNaN(value) || parseInt(value) <= 0) {
+        delete newDetails[criterionId];
+      } else {
+        newDetails[criterionId] = parseInt(value);
+      }
+      return newDetails;
+    });
+  };
+
   const handleSaveScore = async () => {
     try {
-      // Chuyển format từ Object { id: quantity } sang Array [{ criterionId, quantity }] để ném cho BE
       const detailsArray = Object.keys(scoreDetails).map((key) => ({
         criterionId: key,
         quantity: scoreDetails[key],
@@ -141,15 +152,14 @@ const Scoring = () => {
       await weeklyScoreApi.saveScore(payload);
       toast.success(`Đã lưu điểm cho lớp ${selectedClass.name}`);
       closeModal();
-      fetchAllData(); // Refresh lại danh sách thẻ
+      fetchAllData();
     } catch (error) {
       toast.error(error.response?.data?.message || "Lỗi khi lưu điểm");
     }
   };
 
-  // XÓA ĐIỂM (RESET)
   const handleDeleteScore = async (e, scoreId) => {
-    e.stopPropagation(); // Ngăn sự kiện click vào thẻ (tránh mở Modal)
+    e.stopPropagation();
     if (
       window.confirm(
         "Bạn có chắc muốn xóa điểm của lớp này? Trạng thái sẽ về 'Chưa chấm'.",
@@ -165,7 +175,7 @@ const Scoring = () => {
     }
   };
 
-  // --- RENDER BỘ ĐẾM TRONG FORM ---
+  // --- RENDER BỘ ĐẾM TRONG FORM (Đã nâng cấp Input) ---
   const renderCriterionRow = (c) => {
     const qty = scoreDetails[c._id] || 0;
     return (
@@ -173,25 +183,39 @@ const Scoring = () => {
         key={c._id}
         className="flex items-center justify-between p-3 mb-2 bg-gray-50 rounded-lg border border-gray-100"
       >
-        <div className="flex flex-col">
-          <span className="font-medium text-gray-800 text-sm">{c.name}</span>
+        <div className="flex flex-col flex-1 pr-4">
+          <span className="font-medium text-gray-800 text-sm leading-tight">
+            {c.name}
+          </span>
           <span
-            className={`text-xs font-bold ${c.point > 0 ? "text-green-600" : "text-red-600"}`}
+            className={`text-xs font-bold mt-1 ${c.point > 0 ? "text-green-600" : "text-red-600"}`}
           >
             {c.point > 0 ? `+${c.point}` : c.point} đ / lần
           </span>
         </div>
-        <div className="flex items-center gap-3">
+
+        {/* Bộ Input +/- */}
+        <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
           <button
             onClick={() => updateQuantity(c._id, -1)}
-            className="w-7 h-7 flex items-center justify-center rounded-full bg-white border border-gray-300 text-gray-600 hover:bg-gray-100"
+            className="w-7 h-7 flex items-center justify-center rounded bg-gray-50 text-gray-600 hover:bg-gray-200 transition-colors"
           >
             <Minus size={14} />
           </button>
-          <span className="w-4 text-center font-bold text-gray-800">{qty}</span>
+
+          <input
+            type="number"
+            min="0"
+            value={qty === 0 ? "" : qty}
+            onChange={(e) => handleManualInput(c._id, e.target.value)}
+            placeholder="0"
+            className="w-10 h-7 text-center font-bold text-gray-800 bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded placeholder-gray-300"
+            style={{ MozAppearance: "textfield" }} // Ẩn mũi tên mặc định của input number
+          />
+
           <button
             onClick={() => updateQuantity(c._id, 1)}
-            className="w-7 h-7 flex items-center justify-center rounded-full bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100"
+            className="w-7 h-7 flex items-center justify-center rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
           >
             <Plus size={14} />
           </button>
@@ -224,96 +248,137 @@ const Scoring = () => {
   return (
     <div className="font-sans">
       {/* HEADER PAGE */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-        <h2 className="text-xl font-bold text-gray-800">Chấm điểm thi đua</h2>
-        <div className="flex items-center gap-4 mt-2">
-          <p className="text-sm text-gray-500">Đang chấm cho:</p>
-          <span className="px-3 py-1 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm">
-            {activeWeek.name}
-          </span>
-          <span className="px-3 py-1 bg-gray-100 text-gray-600 font-medium rounded-lg text-sm">
-            Năm học {activeWeek.schoolYearId.name}
-          </span>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Chấm điểm thi đua</h2>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <span className="text-sm text-gray-500">Đang chấm cho:</span>
+            <span className="px-3 py-1 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm">
+              {activeWeek.name}
+            </span>
+            <span className="px-3 py-1 bg-gray-100 text-gray-600 font-medium rounded-lg text-sm">
+              Năm học {activeWeek.schoolYearId.name}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* DANH SÁCH THẺ LỚP (GRID LAYOUT) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {classesList.map((cls) => (
-          <div
-            key={cls._id}
-            onClick={() => openScoringModal(cls)}
-            className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md
-              ${
-                cls.scoreRecord
-                  ? "bg-green-50/30 border-green-200 hover:border-green-400"
-                  : "bg-white border-gray-200 hover:border-blue-400"
-              }`}
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-2xl font-black text-gray-800">
-                  {cls.name}
-                </h3>
-                <span className="text-sm text-gray-500">Khối {cls.grade}</span>
-              </div>
+      {/* DANH SÁCH LỚP (LIST DỌC 1 HÀNG 1 LỚP) */}
+      <div className="flex flex-col gap-4">
+        {classesList.map((cls, index) => {
+          const isScored = !!cls.scoreRecord;
+          const rank = index + 1; // Vì mảng đã được sort, index + 1 chính là thứ hạng
 
-              {cls.scoreRecord ? (
-                <span className="flex items-center gap-1 bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">
-                  <CheckCircle2 size={14} /> Đã chấm
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 bg-gray-100 text-gray-500 px-2 py-1 rounded text-xs font-bold">
-                  <Clock size={14} /> Chưa chấm
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between border-t border-gray-100 pt-3">
-              <div>
-                <span className="text-xs text-gray-500 block mb-0.5">
-                  Tổng điểm
-                </span>
-                <span
-                  className={`text-lg font-bold ${cls.scoreRecord ? (cls.scoreRecord.totalScore >= 0 ? "text-green-600" : "text-red-600") : "text-gray-400"}`}
+          return (
+            <div
+              key={cls._id}
+              onClick={() => openScoringModal(cls)}
+              className={`relative flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md
+                ${
+                  isScored
+                    ? "bg-white border-green-200 hover:border-green-400"
+                    : "bg-gray-50 border-gray-200 hover:border-blue-400 opacity-80 hover:opacity-100"
+                }`}
+            >
+              {/* Bên trái: Hạng & Thông tin lớp */}
+              <div className="flex items-center gap-5 w-full sm:w-auto">
+                {/* Cột hiển thị Hạng (Chỉ hiện khi đã chấm) */}
+                <div
+                  className={`w-14 h-14 shrink-0 flex flex-col items-center justify-center rounded-xl font-black text-lg
+                  ${
+                    !isScored
+                      ? "bg-gray-200 text-gray-400"
+                      : rank === 1
+                        ? "bg-yellow-100 text-yellow-600 border border-yellow-300"
+                        : rank === 2
+                          ? "bg-gray-200 text-gray-600 border border-gray-300"
+                          : rank === 3
+                            ? "bg-orange-100 text-orange-600 border border-orange-300"
+                            : "bg-blue-50 text-blue-600 border border-blue-200"
+                  }
+                `}
                 >
-                  {cls.scoreRecord ? cls.scoreRecord.totalScore : "---"}
-                </span>
+                  {isScored ? (
+                    <>
+                      {rank <= 3 && <Trophy size={14} className="mb-0.5" />}
+                      <span>#{rank}</span>
+                    </>
+                  ) : (
+                    <span>--</span>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <h3 className="text-xl font-bold text-gray-800">
+                      {cls.name}
+                    </h3>
+                    {isScored ? (
+                      <span className="flex items-center gap-1 bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold">
+                        <CheckCircle2 size={12} /> Đã chấm
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-xs font-bold">
+                        <Clock size={12} /> Chưa chấm
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Khối {cls.grade} • Năm học {activeWeek.schoolYearId.name}
+                  </div>
+                </div>
               </div>
 
-              {/* Nếu đã chấm thì hiện Action Edit/Delete */}
-              {cls.scoreRecord ? (
-                <div className="flex gap-2">
-                  <button
-                    className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"
-                    title="Sửa điểm"
+              {/* Bên phải: Tổng điểm & Action */}
+              <div className="flex items-center justify-between w-full sm:w-auto mt-4 sm:mt-0 sm:pl-6 sm:border-l border-gray-100 min-w-[200px]">
+                <div className="text-left sm:text-right">
+                  <span className="text-xs text-gray-500 block mb-0.5">
+                    Tổng điểm
+                  </span>
+                  <span
+                    className={`text-2xl font-black ${isScored ? (cls.scoreRecord.totalScore >= 0 ? "text-green-600" : "text-red-600") : "text-gray-300"}`}
                   >
-                    <Edit3 size={16} />
-                  </button>
-                  <button
-                    onClick={(e) => handleDeleteScore(e, cls.scoreRecord._id)}
-                    className="p-1.5 text-red-500 hover:bg-red-100 rounded z-10 relative"
-                    title="Xóa/Reset"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                    {isScored ? cls.scoreRecord.totalScore : "Chưa có"}
+                  </span>
                 </div>
-              ) : (
-                <span className="text-xs font-medium text-blue-600">
-                  Click để chấm
-                </span>
-              )}
+
+                <div className="ml-6 flex gap-2">
+                  {isScored ? (
+                    <>
+                      <button
+                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                        title="Sửa điểm"
+                      >
+                        <Edit3 size={18} />
+                      </button>
+                      <button
+                        onClick={(e) =>
+                          handleDeleteScore(e, cls.scoreRecord._id)
+                        }
+                        className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-colors z-10 relative"
+                        title="Xóa / Reset về Chưa chấm"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </>
+                  ) : (
+                    <button className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
+                      Bấm để chấm
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* MODAL CHẤM ĐIỂM (CHIA 2 CỘT) */}
+      {/* MODAL CHẤM ĐIỂM */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="flex justify-between items-center p-5 border-b border-gray-200 bg-gray-50 rounded-t-xl">
+            <div className="flex justify-between items-center p-5 border-b border-gray-200 bg-gray-50 rounded-t-xl shrink-0">
               <div>
                 <h3 className="text-xl font-bold text-gray-800">
                   Chấm điểm lớp{" "}
@@ -325,23 +390,23 @@ const Scoring = () => {
               </div>
               <button
                 onClick={closeModal}
-                className="text-gray-400 hover:text-gray-800 bg-white p-1.5 rounded-full border border-gray-200 shadow-sm"
+                className="text-gray-400 hover:text-gray-800 bg-white p-1.5 rounded-full border border-gray-200 shadow-sm transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Modal Body (2 Cột) */}
-            <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Cột 1: Vi Phạm (Điểm Trừ) */}
-                <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm">
-                  <h4 className="flex items-center gap-2 font-bold text-red-600 mb-4 pb-2 border-b border-red-50">
-                    <AlertCircle size={18} /> LỖI VI PHẠM (ĐIỂM TRỪ)
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50/50">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+                {/* Cột Vi Phạm */}
+                <div className="bg-white p-4 sm:p-5 rounded-xl border border-red-100 shadow-sm h-fit">
+                  <h4 className="flex items-center gap-2 font-bold text-red-600 mb-4 pb-3 border-b border-red-50 text-lg">
+                    <AlertCircle size={20} /> LỖI VI PHẠM (ĐIỂM TRỪ)
                   </h4>
                   <div className="flex flex-col gap-1">
                     {criteria.penalty.length === 0 ? (
-                      <p className="text-sm text-gray-400">
+                      <p className="text-sm text-gray-400 italic">
                         Không có tiêu chí điểm trừ.
                       </p>
                     ) : null}
@@ -349,14 +414,14 @@ const Scoring = () => {
                   </div>
                 </div>
 
-                {/* Cột 2: Khen Thưởng (Điểm Cộng) */}
-                <div className="bg-white p-4 rounded-xl border border-green-100 shadow-sm">
-                  <h4 className="flex items-center gap-2 font-bold text-green-600 mb-4 pb-2 border-b border-green-50">
-                    <CheckCircle2 size={18} /> KHEN THƯỞNG (ĐIỂM CỘNG)
+                {/* Cột Khen Thưởng */}
+                <div className="bg-white p-4 sm:p-5 rounded-xl border border-green-100 shadow-sm h-fit">
+                  <h4 className="flex items-center gap-2 font-bold text-green-600 mb-4 pb-3 border-b border-green-50 text-lg">
+                    <CheckCircle2 size={20} /> KHEN THƯỞNG (ĐIỂM CỘNG)
                   </h4>
                   <div className="flex flex-col gap-1">
                     {criteria.bonus.length === 0 ? (
-                      <p className="text-sm text-gray-400">
+                      <p className="text-sm text-gray-400 italic">
                         Không có tiêu chí điểm cộng.
                       </p>
                     ) : null}
@@ -367,20 +432,20 @@ const Scoring = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-5 border-t border-gray-200 bg-white rounded-b-xl flex justify-between items-center">
-              <p className="text-sm text-gray-500 italic">
+            <div className="p-5 border-t border-gray-200 bg-white rounded-b-xl flex justify-between items-center shrink-0">
+              <p className="text-sm text-gray-500 italic hidden sm:block">
                 Tổng điểm sẽ được hệ thống tính tự động.
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-3 w-full sm:w-auto">
                 <button
                   onClick={closeModal}
-                  className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="flex-1 sm:flex-none px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
                   Đóng
                 </button>
                 <button
                   onClick={handleSaveScore}
-                  className="px-6 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md"
+                  className="flex-1 sm:flex-none px-6 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md"
                 >
                   XÁC NHẬN LƯU
                 </button>

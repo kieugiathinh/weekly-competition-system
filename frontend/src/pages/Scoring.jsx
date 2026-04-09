@@ -9,6 +9,9 @@ import {
   AlertCircle,
   X,
   Trophy,
+  Lock,
+  Unlock,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { classApi } from "../api/classApi";
@@ -17,43 +20,71 @@ import { criterionApi } from "../api/criterionApi";
 import { weeklyScoreApi } from "../api/weeklyScoreApi";
 
 const Scoring = () => {
-  const [activeWeek, setActiveWeek] = useState(null);
-  const [classesList, setClassesList] = useState([]);
+  // --- STATES DỮ LIỆU NỀN TẢNG ---
+  const [baseClasses, setBaseClasses] = useState([]); // Chứa danh sách lớp gốc
   const [criteria, setCriteria] = useState({ bonus: [], penalty: [] });
-  const [loading, setLoading] = useState(true);
+  const [weeksList, setWeeksList] = useState([]); // Danh sách tất cả các tuần
 
+  // --- STATES GIAO DIỆN & BỘ LỌC ---
+  const [loading, setLoading] = useState(true);
+  const [selectedWeekId, setSelectedWeekId] = useState("");
+  const [displayClasses, setDisplayClasses] = useState([]); // Lớp + Điểm (Đã merge và sort)
+
+  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
   const [scoreDetails, setScoreDetails] = useState({});
 
-  const fetchAllData = async () => {
+  // Tính toán trạng thái "Chỉ xem" dựa vào Tuần đang chọn
+  const currentSelectedWeek = weeksList.find((w) => w._id === selectedWeekId);
+  const isReadOnly = currentSelectedWeek?.isLocked || false;
+
+  // 1. FETCH DỮ LIỆU NỀN (Chỉ chạy 1 lần khi vào trang)
+  const fetchBaseData = async () => {
     try {
       setLoading(true);
-      const weeksData = await weekApi.getAll();
-      const currentOpenWeek = weeksData.find(
-        (w) => !w.isLocked && w.schoolYearId?.isCurrent,
-      );
-
-      if (!currentOpenWeek) {
-        setActiveWeek(null);
-        setLoading(false);
-        return;
-      }
-      setActiveWeek(currentOpenWeek);
-
-      const [classesData, criteriaData, rankingData] = await Promise.all([
-        classApi.getAll({ schoolYearId: currentOpenWeek.schoolYearId._id }),
+      const [classesData, criteriaData, weeksData] = await Promise.all([
+        classApi.getAll(), // Lấy lớp (Tùy logic BE, có thể truyền filter năm học hiện tại)
         criterionApi.getAll({ isActive: true }),
-        weeklyScoreApi.getRankingByWeek(currentOpenWeek._id),
+        weekApi.getAll(),
       ]);
+
+      setBaseClasses(classesData);
 
       setCriteria({
         bonus: criteriaData.filter((c) => c.type === "bonus"),
         penalty: criteriaData.filter((c) => c.type === "penalty"),
       });
 
-      // Gắn điểm vào Lớp
-      const mergedClasses = classesData.map((cls) => {
+      setWeeksList(weeksData);
+
+      // TỰ ĐỘNG CHỌN TUẦN MẶC ĐỊNH: Ưu tiên tuần đang mở. Nếu không có, lấy tuần mới nhất.
+      if (weeksData.length > 0) {
+        const openWeek = weeksData.find((w) => !w.isLocked);
+        setSelectedWeekId(
+          openWeek ? openWeek._id : weeksData[weeksData.length - 1]._id,
+        );
+      }
+    } catch (error) {
+      toast.error("Lỗi khi tải cấu hình hệ thống");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBaseData();
+  }, []);
+
+  // 2. FETCH BẢNG ĐIỂM (Chạy mỗi khi đổi Tuần ở Dropdown hoặc Lưu/Xóa điểm)
+  const fetchScoresForWeek = async (weekId) => {
+    if (!weekId || baseClasses.length === 0) return;
+
+    try {
+      const rankingData = await weeklyScoreApi.getRankingByWeek(weekId);
+
+      // Ghép điểm vào mảng Lớp gốc
+      const mergedClasses = baseClasses.map((cls) => {
         const classScore = rankingData.find(
           (score) => score.classId._id === cls._id,
         );
@@ -63,36 +94,36 @@ const Scoring = () => {
         };
       });
 
-      // THUẬT TOÁN SORT:
-      // 1. Lớp nào có điểm xếp trên, chưa có điểm xếp dưới
-      // 2. Nếu cùng có điểm, lớp nào điểm cao hơn xếp trên
+      // Thuật toán Sắp xếp (Sort) như cũ
       const sortedClasses = mergedClasses.sort((a, b) => {
-        if (a.scoreRecord && b.scoreRecord) {
-          return b.scoreRecord.totalScore - a.scoreRecord.totalScore; // Giảm dần
-        }
-        if (a.scoreRecord && !b.scoreRecord) return -1; // a lên trên
-        if (!a.scoreRecord && b.scoreRecord) return 1; // b lên trên
+        if (a.scoreRecord && b.scoreRecord)
+          return b.scoreRecord.totalScore - a.scoreRecord.totalScore;
+        if (a.scoreRecord && !b.scoreRecord) return -1;
+        if (!a.scoreRecord && b.scoreRecord) return 1;
         return 0;
       });
 
-      setClassesList(sortedClasses);
+      setDisplayClasses(sortedClasses);
     } catch (error) {
-      toast.error("Lỗi khi tải dữ liệu chấm điểm");
-    } finally {
-      setLoading(false);
+      toast.error("Lỗi khi tải bảng điểm của tuần này");
     }
   };
 
+  // Lắng nghe sự thay đổi của Tuần được chọn
   useEffect(() => {
-    fetchAllData();
-  }, []);
+    fetchScoresForWeek(selectedWeekId);
+  }, [selectedWeekId, baseClasses]);
 
+  // --- ACTIONS ---
   const openScoringModal = (cls) => {
+    if (isReadOnly) return; // Chặn cứng không cho mở Modal nếu tuần đã khóa
+
     setSelectedClass(cls);
     if (cls.scoreRecord) {
       const existingDetails = {};
       cls.scoreRecord.details.forEach((item) => {
-        existingDetails[item.criterionId] = item.quantity;
+        existingDetails[item.criterionId._id || item.criterionId] =
+          item.quantity;
       });
       setScoreDetails(existingDetails);
     } else {
@@ -107,31 +138,23 @@ const Scoring = () => {
     setScoreDetails({});
   };
 
-  // Click +/-
   const updateQuantity = (criterionId, amount) => {
     setScoreDetails((prev) => {
       const currentQty = prev[criterionId] || 0;
       const newQty = Math.max(0, currentQty + amount);
       const newDetails = { ...prev };
-      if (newQty === 0) {
-        delete newDetails[criterionId];
-      } else {
-        newDetails[criterionId] = newQty;
-      }
+      if (newQty === 0) delete newDetails[criterionId];
+      else newDetails[criterionId] = newQty;
       return newDetails;
     });
   };
 
-  // Gõ phím trực tiếp
   const handleManualInput = (criterionId, value) => {
     setScoreDetails((prev) => {
       const newDetails = { ...prev };
-      // Nếu user xóa rỗng hoặc nhập số âm/bằng 0 -> Hủy bỏ tiêu chí đó
-      if (value === "" || isNaN(value) || parseInt(value) <= 0) {
+      if (value === "" || isNaN(value) || parseInt(value) <= 0)
         delete newDetails[criterionId];
-      } else {
-        newDetails[criterionId] = parseInt(value);
-      }
+      else newDetails[criterionId] = parseInt(value);
       return newDetails;
     });
   };
@@ -145,14 +168,14 @@ const Scoring = () => {
 
       const payload = {
         classId: selectedClass._id,
-        weekId: activeWeek._id,
+        weekId: selectedWeekId, // Lưu vào tuần đang chọn
         details: detailsArray,
       };
 
       await weeklyScoreApi.saveScore(payload);
       toast.success(`Đã lưu điểm cho lớp ${selectedClass.name}`);
       closeModal();
-      fetchAllData();
+      fetchScoresForWeek(selectedWeekId); // Chỉ re-fetch bảng điểm, không tải lại cấu hình
     } catch (error) {
       toast.error(error.response?.data?.message || "Lỗi khi lưu điểm");
     }
@@ -160,6 +183,11 @@ const Scoring = () => {
 
   const handleDeleteScore = async (e, scoreId) => {
     e.stopPropagation();
+    if (isReadOnly) {
+      toast.error("Tuần này đã khóa, không thể xóa điểm!");
+      return;
+    }
+
     if (
       window.confirm(
         "Bạn có chắc muốn xóa điểm của lớp này? Trạng thái sẽ về 'Chưa chấm'.",
@@ -168,14 +196,13 @@ const Scoring = () => {
       try {
         await weeklyScoreApi.deleteScore(scoreId);
         toast.success("Đã reset điểm lớp về trạng thái Chưa chấm");
-        fetchAllData();
+        fetchScoresForWeek(selectedWeekId);
       } catch (error) {
-        toast.error("Lỗi khi xóa điểm");
+        toast.error(error.response?.data?.message || "Lỗi khi xóa điểm");
       }
     }
   };
 
-  // --- RENDER BỘ ĐẾM TRONG FORM (Đã nâng cấp Input) ---
   const renderCriterionRow = (c) => {
     const qty = scoreDetails[c._id] || 0;
     return (
@@ -194,7 +221,6 @@ const Scoring = () => {
           </span>
         </div>
 
-        {/* Bộ Input +/- */}
         <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
           <button
             onClick={() => updateQuantity(c._id, -1)}
@@ -202,7 +228,6 @@ const Scoring = () => {
           >
             <Minus size={14} />
           </button>
-
           <input
             type="number"
             min="0"
@@ -210,9 +235,8 @@ const Scoring = () => {
             onChange={(e) => handleManualInput(c._id, e.target.value)}
             placeholder="0"
             className="w-10 h-7 text-center font-bold text-gray-800 bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded placeholder-gray-300"
-            style={{ MozAppearance: "textfield" }} // Ẩn mũi tên mặc định của input number
+            style={{ MozAppearance: "textfield" }}
           />
-
           <button
             onClick={() => updateQuantity(c._id, 1)}
             className="w-7 h-7 flex items-center justify-center rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
@@ -226,63 +250,100 @@ const Scoring = () => {
 
   if (loading)
     return (
-      <div className="p-8 text-center text-gray-500">
-        Đang tải cấu hình chấm điểm...
+      <div className="p-8 text-center text-gray-500 font-medium">
+        Đang thiết lập bàn chấm điểm...
       </div>
     );
 
-  if (!activeWeek)
+  if (weeksList.length === 0)
     return (
       <div className="bg-white p-8 rounded-xl border border-gray-200 text-center shadow-sm">
-        <AlertCircle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
+        <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
         <h2 className="text-xl font-bold text-gray-800 mb-2">
-          Chưa có Tuần thi đua nào đang mở!
+          Chưa có Tuần thi đua nào được tạo!
         </h2>
         <p className="text-gray-500">
-          Vui lòng vào mục Quản lý Tuần để tạo tuần mới hoặc mở khóa một tuần
-          đang đóng.
+          Vui lòng vào mục Quản lý Tuần để tạo tuần thi đua đầu tiên.
         </p>
       </div>
     );
 
   return (
     <div className="font-sans">
-      {/* HEADER PAGE */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800">Chấm điểm thi đua</h2>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className="text-sm text-gray-500">Đang chấm cho:</span>
-            <span className="px-3 py-1 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm">
-              {activeWeek.name}
+      {/* 1. HEADER & DROPDOWN LỌC TUẦN */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">
+              Chấm điểm thi đua
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Chọn tuần để xem hoặc chấm điểm.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <span className="text-sm font-medium text-gray-700 hidden sm:block">
+              Đang xem:
             </span>
-            <span className="px-3 py-1 bg-gray-100 text-gray-600 font-medium rounded-lg text-sm">
-              Năm học {activeWeek.schoolYearId.name}
-            </span>
+            <select
+              value={selectedWeekId}
+              onChange={(e) => setSelectedWeekId(e.target.value)}
+              className="w-full sm:w-64 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              {weeksList.map((w) => (
+                <option key={w._id} value={w._id}>
+                  {w.name} {w.isLocked ? "(Đã khóa)" : "(Đang mở)"}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
 
-      {/* DANH SÁCH LỚP (LIST DỌC 1 HÀNG 1 LỚP) */}
+      {/* 2. CẢNH BÁO CHẾ ĐỘ CHỈ XEM (READ-ONLY) */}
+      {isReadOnly && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex items-start gap-3 shadow-sm animate-in fade-in duration-300">
+          <Lock className="text-orange-500 shrink-0 mt-0.5" size={20} />
+          <div>
+            <h4 className="font-bold text-orange-800">
+              Chế độ Chỉ xem (Tuần đã khóa sổ)
+            </h4>
+            <p className="text-sm text-orange-700 mt-1">
+              Tuần này đã được chốt sổ. Bạn có thể xem kết quả xếp hạng nhưng{" "}
+              <strong>không thể thêm, sửa, hoặc xóa</strong> điểm của các lớp.
+              Nếu cần thay đổi, hãy yêu cầu Admin mở khóa tuần này.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 3. DANH SÁCH LỚP (BẢNG XẾP HẠNG) */}
       <div className="flex flex-col gap-4">
-        {classesList.map((cls, index) => {
+        {displayClasses.map((cls, index) => {
           const isScored = !!cls.scoreRecord;
-          const rank = index + 1; // Vì mảng đã được sort, index + 1 chính là thứ hạng
+          const rank = index + 1;
 
           return (
             <div
               key={cls._id}
-              onClick={() => openScoringModal(cls)}
-              className={`relative flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md
+              // Chặn click nếu ReadOnly
+              onClick={() => !isReadOnly && openScoringModal(cls)}
+              className={`relative flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border-2 transition-all 
                 ${
                   isScored
-                    ? "bg-white border-green-200 hover:border-green-400"
-                    : "bg-gray-50 border-gray-200 hover:border-blue-400 opacity-80 hover:opacity-100"
-                }`}
+                    ? "bg-white border-green-200"
+                    : "bg-gray-50 border-gray-200 opacity-80"
+                }
+                ${
+                  isReadOnly
+                    ? "cursor-default"
+                    : "cursor-pointer hover:shadow-md hover:border-blue-400"
+                }
+              `}
             >
               {/* Bên trái: Hạng & Thông tin lớp */}
               <div className="flex items-center gap-5 w-full sm:w-auto">
-                {/* Cột hiển thị Hạng (Chỉ hiện khi đã chấm) */}
                 <div
                   className={`w-14 h-14 shrink-0 flex flex-col items-center justify-center rounded-xl font-black text-lg
                   ${
@@ -323,9 +384,7 @@ const Scoring = () => {
                       </span>
                     )}
                   </div>
-                  <div className="text-sm text-gray-500">
-                    Khối {cls.grade} • Năm học {activeWeek.schoolYearId.name}
-                  </div>
+                  <div className="text-sm text-gray-500">Khối {cls.grade}</div>
                 </div>
               </div>
 
@@ -343,7 +402,12 @@ const Scoring = () => {
                 </div>
 
                 <div className="ml-6 flex gap-2">
-                  {isScored ? (
+                  {/* Nếu ReadOnly -> Ẩn toàn bộ nút sửa xóa, hiển thị nhãn Đã khóa */}
+                  {isReadOnly ? (
+                    <span className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-sm font-medium border border-gray-200">
+                      <Lock size={14} /> Chốt sổ
+                    </span>
+                  ) : isScored ? (
                     <>
                       <button
                         className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
@@ -362,7 +426,7 @@ const Scoring = () => {
                       </button>
                     </>
                   ) : (
-                    <button className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
+                    <button className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm">
                       Bấm để chấm
                     </button>
                   )}
@@ -373,11 +437,10 @@ const Scoring = () => {
         })}
       </div>
 
-      {/* MODAL CHẤM ĐIỂM */}
-      {isModalOpen && (
+      {/* 4. MODAL CHẤM ĐIỂM (Giữ nguyên như cũ) */}
+      {isModalOpen && !isReadOnly && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
             <div className="flex justify-between items-center p-5 border-b border-gray-200 bg-gray-50 rounded-t-xl shrink-0">
               <div>
                 <h3 className="text-xl font-bold text-gray-800">
@@ -386,7 +449,9 @@ const Scoring = () => {
                     {selectedClass?.name}
                   </span>
                 </h3>
-                <p className="text-sm text-gray-500">{activeWeek.name}</p>
+                <p className="text-sm text-gray-500">
+                  {currentSelectedWeek?.name}
+                </p>
               </div>
               <button
                 onClick={closeModal}
@@ -396,7 +461,6 @@ const Scoring = () => {
               </button>
             </div>
 
-            {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50/50">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
                 {/* Cột Vi Phạm */}
@@ -431,7 +495,6 @@ const Scoring = () => {
               </div>
             </div>
 
-            {/* Modal Footer */}
             <div className="p-5 border-t border-gray-200 bg-white rounded-b-xl flex justify-between items-center shrink-0">
               <p className="text-sm text-gray-500 italic hidden sm:block">
                 Tổng điểm sẽ được hệ thống tính tự động.

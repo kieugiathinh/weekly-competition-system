@@ -13,13 +13,8 @@ import Classes from "./pages/Classes";
 import Criteria from "./pages/Criteria";
 import Weeks from "./pages/Weeks";
 import Scoring from "./pages/Scoring";
-
-const Dashboard = () => (
-  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800 mb-2">Bảng điều khiển</h1>
-    <p className="text-gray-500">Chào mừng bạn đến với hệ thống.</p>
-  </div>
-);
+import Dashboard from "./pages/Dashboard";
+import Users from "./pages/Users";
 
 function App() {
   return (
@@ -39,6 +34,7 @@ function App() {
                 <Route path="criteria" element={<Criteria />} />
                 <Route path="weeks" element={<Weeks />} />
                 <Route path="scoring" element={<Scoring />} />
+                <Route path="users" element={<Users />} />
               </Route>
             </Route>
           </Routes>
