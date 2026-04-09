@@ -15,6 +15,7 @@ import Weeks from "./pages/Weeks";
 import Scoring from "./pages/Scoring";
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
+import Profile from "./pages/Profile";
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
                 <Route path="weeks" element={<Weeks />} />
                 <Route path="scoring" element={<Scoring />} />
                 <Route path="users" element={<Users />} />
+                <Route path="profile" element={<Profile />} />
               </Route>
             </Route>
           </Routes>

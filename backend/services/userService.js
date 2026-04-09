@@ -29,6 +29,7 @@ const updateUserService = async (id, updateData) => {
 
   user.name = updateData.name || user.name;
   user.role = updateData.role || user.role;
+  user.username = updateData.username || user.username;
 
   // Nếu có cập nhật mật khẩu thì hash lại
   if (updateData.password) {

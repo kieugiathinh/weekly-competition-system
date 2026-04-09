@@ -1,10 +1,9 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState } from "react";
 import axiosInstance from "../utils/axiosInstance";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  // Đọc thông tin user từ localStorage (nếu có) khi F5 tải lại trang
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem("userInfo");
     return savedUser ? JSON.parse(savedUser) : null;
@@ -18,8 +17,7 @@ export const AuthProvider = ({ children }) => {
         password,
       });
 
-      // Cookie đã được Backend tự động gắn vào trình duyệt.
-      // Ở đây ta chỉ lưu thông tin cơ bản (tên, role) vào State và LocalStorage để hiển thị UI
+      // Lưu State và LocalStorage
       setUser(data);
       localStorage.setItem("userInfo", JSON.stringify(data));
 
@@ -43,7 +41,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   );

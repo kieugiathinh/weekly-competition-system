@@ -15,7 +15,8 @@ import { userApi } from "../api/userApi";
 import { useAuth } from "../context/AuthContext";
 
 const Users = () => {
-  const { user: currentUser } = useAuth(); // Lấy thông tin admin đang đăng nhập
+  // 1. Kéo thêm setUser ra để dùng
+  const { user: currentUser, setUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,7 +26,7 @@ const Users = () => {
     name: "",
     username: "",
     password: "",
-    role: "user", // Mặc định tạo tài khoản thường (cờ đỏ)
+    role: "user",
   });
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -71,7 +72,7 @@ const Users = () => {
       setFormData({
         name: userItem.name,
         username: userItem.username,
-        password: "", // Không hiển thị pass cũ, để trống = không đổi
+        password: "",
         role: userItem.role || "user",
       });
     } else {
@@ -100,15 +101,21 @@ const Users = () => {
     }
 
     try {
-      // Nếu là Sửa và không nhập pass -> xóa trường password để backend không update
       const dataToSubmit = { ...formData };
       if (editingId && !dataToSubmit.password) {
         delete dataToSubmit.password;
       }
 
       if (editingId) {
-        await userApi.update(editingId, dataToSubmit);
+        const updatedUser = await userApi.update(editingId, dataToSubmit);
         toast.success("Cập nhật tài khoản thành công");
+
+        // 2. CHECK VÀ CẬP NHẬT HEADER NGAY LẬP TỨC NẾU ADMIN ĐANG SỬA CHÍNH MÌNH
+        if (editingId === currentUser?._id) {
+          const newUserData = { ...currentUser, ...updatedUser };
+          setUser(newUserData);
+          localStorage.setItem("userInfo", JSON.stringify(newUserData));
+        }
       } else {
         await userApi.create(dataToSubmit);
         toast.success("Tạo tài khoản mới thành công");
@@ -365,9 +372,7 @@ const Users = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, username: e.target.value })
                   }
-                  disabled={editingId ? true : false} // Không cho đổi username khi đang sửa
-                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 
-                    ${editingId ? "bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed" : "border-gray-200 bg-white text-gray-800"}`}
+                  className="w-full px-4 py-2 border border-gray-200 bg-white text-gray-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
                   placeholder="VD: codo_khoi6"
                 />
               </div>
