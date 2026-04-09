@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 import {
   CheckCircle2,
   Clock,
@@ -82,16 +83,14 @@ const Scoring = () => {
           weekApi.getAll({ schoolYearId: selectedYearId }),
         ]);
 
-        // LOGIC LỌC TUẦN: Chỉ lấy những tuần đã/đang diễn ra (startDate <= hôm nay)
         const today = new Date();
-        today.setHours(23, 59, 59, 999); // Tính đến cuối ngày hôm nay
-
+        today.setHours(23, 59, 59, 999);
         const visibleWeeks = weeksData.filter(
           (w) => new Date(w.startDate) <= today,
         );
 
         setBaseClasses(classesData);
-        setWeeksList(visibleWeeks); // Chỉ lưu danh sách tuần hợp lệ vào State
+        setWeeksList(visibleWeeks);
 
         if (visibleWeeks.length > 0) {
           const openWeek = visibleWeeks.find((w) => !w.isLocked);
@@ -228,38 +227,100 @@ const Scoring = () => {
     }
   };
 
-  // --- EXCEL ---
-  const handleExportExcel = () => {
+  // --- XUẤT EXCEL GỌN GÀNG (5 CỘT CHÍNH) VỚI ĐỊNH DẠNG ĐẸP ---
+  const handleExportExcel = async () => {
     if (displayClasses.length === 0)
       return toast.warning("Không có dữ liệu để xuất!");
 
-    const excelData = displayClasses.map((cls, index) => ({
-      Hạng: cls.scoreRecord ? index + 1 : "Chưa xếp hạng",
-      "Tên Lớp": cls.name,
-      Khối: `Khối ${cls.grade}`,
-      "Tổng Điểm": cls.scoreRecord ? cls.scoreRecord.totalScore : "Chưa chấm",
-      "Trạng Thái": cls.scoreRecord ? "Đã chấm" : "Chờ chấm",
-    }));
+    try {
+      // 1. Tạo Workbook & Worksheet
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Bảng Xếp Hạng");
 
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Bảng Xếp Hạng");
+      // 2. Định nghĩa cấu trúc 5 cột cố định
+      worksheet.columns = [
+        { header: "Hạng", key: "rank", width: 10 },
+        { header: "Tên Lớp", key: "className", width: 20 },
+        { header: "Khối", key: "grade", width: 15 },
+        { header: "Tổng Điểm", key: "totalScore", width: 15 },
+        { header: "Trạng Thái", key: "status", width: 15 },
+      ];
 
-    worksheet["!cols"] = [
-      { wch: 15 },
-      { wch: 20 },
-      { wch: 15 },
-      { wch: 15 },
-      { wch: 15 },
-    ];
+      // 3. Đổ dữ liệu vào từng dòng
+      displayClasses.forEach((cls, index) => {
+        const rowData = {
+          rank: cls.scoreRecord ? index + 1 : "Chưa xếp",
+          className: cls.name,
+          grade: `Khối ${cls.grade}`,
+          totalScore: cls.scoreRecord
+            ? cls.scoreRecord.totalScore
+            : "Chưa chấm",
+          status: cls.scoreRecord ? "Đã chấm" : "Chờ chấm",
+        };
+        worksheet.addRow(rowData);
+      });
 
-    const yearName =
-      schoolYears.find((y) => y._id === selectedYearId)?.name || "NamHoc";
-    const weekName = currentSelectedWeek?.name || "Tuan";
-    const fileName = `BXH_${yearName}_${weekName}.xlsx`.replace(/\s+/g, "_");
+      // 4. ĐỊNH DẠNG (FORMATTING) CHO ĐẸP
+      // 4.1 Định dạng thanh Tiêu đề (Row 1)
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } }; // Chữ trắng in đậm
+      headerRow.alignment = {
+        vertical: "middle",
+        horizontal: "center",
+        wrapText: true,
+      };
 
-    XLSX.writeFile(workbook, fileName);
-    toast.success("Đã xuất file Excel thành công!");
+      headerRow.eachCell((cell) => {
+        // Đổ nền xanh dương đậm
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF2563EB" }, // Blue-600
+        };
+        // Kẻ khung (Borders)
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+      });
+
+      // 4.2 Định dạng các dòng Dữ liệu (Từ Row 2 trở đi)
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) {
+          row.eachCell((cell) => {
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+            cell.border = {
+              top: { style: "thin" },
+              left: { style: "thin" },
+              bottom: { style: "thin" },
+              right: { style: "thin" },
+            };
+          });
+        }
+      });
+
+      // 5. Lưu và Xuất File
+      const yearName =
+        schoolYears.find((y) => y._id === selectedYearId)?.name || "NamHoc";
+      const weekName = currentSelectedWeek?.name || "Tuan";
+      const fileName = `BaoCao_${yearName}_${weekName}.xlsx`.replace(
+        /\s+/g,
+        "_",
+      );
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      saveAs(blob, fileName);
+
+      toast.success("Đã xuất file báo cáo Excel gọn gàng và đẹp mắt!");
+    } catch (error) {
+      console.error("Lỗi xuất Excel:", error);
+      toast.error("Có lỗi xảy ra khi xuất file Excel.");
+    }
   };
 
   const renderCriterionRow = (c) => {
@@ -369,13 +430,13 @@ const Scoring = () => {
               </select>
             </div>
 
-            {/* NÚT XUẤT EXCEL */}
+            {/* NÚT XUẤT EXCEL MỚI */}
             <button
               onClick={handleExportExcel}
               disabled={weeksList.length === 0 || displayClasses.length === 0}
               className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors font-bold shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Download size={18} /> Xuất Excel
+              <Download size={18} /> Xuất Báo Cáo
             </button>
           </div>
         </div>
