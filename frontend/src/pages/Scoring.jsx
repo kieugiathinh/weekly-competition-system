@@ -22,8 +22,11 @@ import { weekApi } from "../api/weekApi";
 import { criterionApi } from "../api/criterionApi";
 import { weeklyScoreApi } from "../api/weeklyScoreApi";
 import { schoolYearApi } from "../api/schoolYearApi";
+import { useAuth } from "../context/AuthContext"; // Import để kiểm tra role
 
 const Scoring = () => {
+  const { user } = useAuth(); // Lấy thông tin user
+
   // --- STATES BỘ LỌC NĂM & TUẦN ---
   const [schoolYears, setSchoolYears] = useState([]);
   const [selectedYearId, setSelectedYearId] = useState("");
@@ -34,10 +37,10 @@ const Scoring = () => {
   // --- STATES DỮ LIỆU ---
   const [baseClasses, setBaseClasses] = useState([]);
   const [criteria, setCriteria] = useState({ bonus: [], penalty: [] });
-  const [allScores, setAllScores] = useState([]); // Chứa toàn bộ điểm của cả trường
+  const [allScores, setAllScores] = useState([]);
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("6-7"); // State quản lý Tab Khối
+  const [activeTab, setActiveTab] = useState("6-7");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
   const [scoreDetails, setScoreDetails] = useState({});
@@ -45,7 +48,6 @@ const Scoring = () => {
   const currentSelectedWeek = weeksList.find((w) => w._id === selectedWeekId);
   const isReadOnly = currentSelectedWeek?.isLocked || false;
 
-  // 1. TẢI NĂM HỌC VÀ TIÊU CHÍ
   useEffect(() => {
     const fetchInitData = async () => {
       try {
@@ -73,7 +75,6 @@ const Scoring = () => {
     fetchInitData();
   }, []);
 
-  // 2. TẢI LỚP VÀ TUẦN (Có lọc Tuần Tương lai)
   useEffect(() => {
     const fetchYearData = async () => {
       if (!selectedYearId) return;
@@ -111,7 +112,6 @@ const Scoring = () => {
     fetchYearData();
   }, [selectedYearId]);
 
-  // 3. TẢI BẢNG ĐIỂM CỦA TUẦN (Lưu vào allScores)
   const fetchScoresForWeek = async (weekId) => {
     if (!weekId || baseClasses.length === 0) {
       setAllScores([]);
@@ -129,7 +129,6 @@ const Scoring = () => {
     fetchScoresForWeek(selectedWeekId);
   }, [selectedWeekId, baseClasses]);
 
-  // LOGIC LỌC VÀ XẾP HẠNG THEO KHỐI THI ĐUA (Dùng useMemo để tối ưu)
   const displayClasses = useMemo(() => {
     const targetGrades = activeTab === "6-7" ? [6, 7] : [8, 9];
     const filteredBase = baseClasses.filter((cls) =>
@@ -152,7 +151,6 @@ const Scoring = () => {
     });
   }, [activeTab, baseClasses, allScores]);
 
-  // --- ACTIONS CHẤM ĐIỂM ---
   const openScoringModal = (cls) => {
     if (isReadOnly) return;
     setSelectedClass(cls);
@@ -232,7 +230,6 @@ const Scoring = () => {
     }
   };
 
-  // --- XUẤT EXCEL 2 SHEET RIÊNG BIỆT ---
   const handleExportExcel = async () => {
     if (allScores.length === 0)
       return toast.warning("Không có dữ liệu để xuất!");
@@ -240,7 +237,6 @@ const Scoring = () => {
     try {
       const workbook = new ExcelJS.Workbook();
 
-      // Hàm tạo từng sheet
       const generateSheet = (sheetName, grades) => {
         const worksheet = workbook.addWorksheet(sheetName);
 
@@ -252,7 +248,6 @@ const Scoring = () => {
           { header: "Trạng Thái", key: "status", width: 15 },
         ];
 
-        // Lọc và xếp hạng riêng cho Sheet này
         const sheetClasses = baseClasses
           .filter((cls) => grades.includes(cls.grade))
           .map((cls) => {
@@ -279,7 +274,6 @@ const Scoring = () => {
           });
         });
 
-        // Định dạng
         const headerRow = worksheet.getRow(1);
         headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
         headerRow.alignment = {
@@ -316,11 +310,9 @@ const Scoring = () => {
         });
       };
 
-      // Tạo 2 Sheet
       generateSheet("Thi đua Khối 6-7", [6, 7]);
       generateSheet("Thi đua Khối 8-9", [8, 9]);
 
-      // Lưu File
       const yearName =
         schoolYears.find((y) => y._id === selectedYearId)?.name || "NamHoc";
       const weekName = currentSelectedWeek?.name || "Tuan";
@@ -408,7 +400,6 @@ const Scoring = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
-            {/* Lọc Năm Học */}
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
                 Năm học:
@@ -426,7 +417,6 @@ const Scoring = () => {
               </select>
             </div>
 
-            {/* Lọc Tuần */}
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
                 Tuần:
@@ -449,19 +439,20 @@ const Scoring = () => {
               </select>
             </div>
 
-            {/* NÚT XUẤT EXCEL */}
-            <button
-              onClick={handleExportExcel}
-              disabled={weeksList.length === 0 || allScores.length === 0}
-              className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors font-bold shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Download size={18} /> Xuất Báo Cáo
-            </button>
+            {/* CHỈ RENDER NÚT XUẤT EXCEL KHI LÀ ADMIN */}
+            {user?.role === "admin" && (
+              <button
+                onClick={handleExportExcel}
+                disabled={weeksList.length === 0 || allScores.length === 0}
+                className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors font-bold shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download size={18} /> Xuất Báo Cáo
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* CẢNH BÁO NẾU KHÔNG CÓ TUẦN HỢP LỆ */}
       {weeksList.length === 0 ? (
         <div className="bg-white p-8 rounded-xl border border-gray-200 text-center shadow-sm">
           <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
@@ -514,7 +505,7 @@ const Scoring = () => {
         </div>
       )}
 
-      {/* DANH SÁCH LỚP (UI GIỮ NGUYÊN) */}
+      {/* DANH SÁCH LỚP */}
       {weeksList.length > 0 && (
         <div className="flex flex-col gap-4">
           {displayClasses.map((cls, index) => {
@@ -530,7 +521,6 @@ const Scoring = () => {
                   ${isReadOnly ? "cursor-default" : "cursor-pointer hover:shadow-md hover:border-blue-400"}
                 `}
               >
-                {/* Info */}
                 <div className="flex items-center gap-5 w-full sm:w-auto">
                   <div
                     className={`w-14 h-14 shrink-0 flex flex-col items-center justify-center rounded-xl font-black text-lg
@@ -577,7 +567,6 @@ const Scoring = () => {
                   </div>
                 </div>
 
-                {/* Score & Action */}
                 <div className="flex items-center justify-between w-full sm:w-auto mt-4 sm:mt-0 sm:pl-6 sm:border-l border-gray-100 min-w-[200px]">
                   <div className="text-left sm:text-right">
                     <span className="text-xs text-gray-500 block mb-0.5">
@@ -621,7 +610,7 @@ const Scoring = () => {
         </div>
       )}
 
-      {/* MODAL CHẤM ĐIỂM (UI GIỮ NGUYÊN) */}
+      {/* MODAL CHẤM ĐIỂM */}
       {isModalOpen && !isReadOnly && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">

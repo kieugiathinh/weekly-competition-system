@@ -13,7 +13,7 @@ const router = express.Router();
 router
   .route("/")
   .post(protect, admin, createSchoolYear)
-  .get(protect, admin, getSchoolYears);
+  .get(protect, getSchoolYears);
 
 router
   .route("/:id")

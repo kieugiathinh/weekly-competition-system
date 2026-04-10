@@ -13,10 +13,7 @@ const router = express.Router();
 
 router.post("/clone", protect, admin, cloneClasses);
 
-router
-  .route("/")
-  .post(protect, admin, createClass)
-  .get(protect, admin, getClasses);
+router.route("/").post(protect, admin, createClass).get(protect, getClasses);
 
 router
   .route("/:id")
