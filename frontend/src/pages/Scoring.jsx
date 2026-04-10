@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import {
@@ -34,9 +34,10 @@ const Scoring = () => {
   // --- STATES DỮ LIỆU ---
   const [baseClasses, setBaseClasses] = useState([]);
   const [criteria, setCriteria] = useState({ bonus: [], penalty: [] });
-  const [displayClasses, setDisplayClasses] = useState([]);
+  const [allScores, setAllScores] = useState([]); // Chứa toàn bộ điểm của cả trường
 
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("6-7"); // State quản lý Tab Khối
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
   const [scoreDetails, setScoreDetails] = useState({});
@@ -99,7 +100,7 @@ const Scoring = () => {
           );
         } else {
           setSelectedWeekId("");
-          setDisplayClasses([]);
+          setAllScores([]);
         }
       } catch (error) {
         toast.error("Lỗi khi tải dữ liệu năm học");
@@ -110,34 +111,15 @@ const Scoring = () => {
     fetchYearData();
   }, [selectedYearId]);
 
-  // 3. TẢI BẢNG ĐIỂM
+  // 3. TẢI BẢNG ĐIỂM CỦA TUẦN (Lưu vào allScores)
   const fetchScoresForWeek = async (weekId) => {
     if (!weekId || baseClasses.length === 0) {
-      setDisplayClasses(
-        baseClasses.map((cls) => ({ ...cls, scoreRecord: null })),
-      );
+      setAllScores([]);
       return;
     }
-
     try {
       const rankingData = await weeklyScoreApi.getRankingByWeek(weekId);
-
-      const mergedClasses = baseClasses.map((cls) => {
-        const classScore = rankingData.find(
-          (score) => score.classId._id === cls._id,
-        );
-        return { ...cls, scoreRecord: classScore || null };
-      });
-
-      const sortedClasses = mergedClasses.sort((a, b) => {
-        if (a.scoreRecord && b.scoreRecord)
-          return b.scoreRecord.totalScore - a.scoreRecord.totalScore;
-        if (a.scoreRecord && !b.scoreRecord) return -1;
-        if (!a.scoreRecord && b.scoreRecord) return 1;
-        return 0;
-      });
-
-      setDisplayClasses(sortedClasses);
+      setAllScores(rankingData);
     } catch (error) {
       toast.error("Lỗi khi tải bảng điểm của tuần này");
     }
@@ -146,6 +128,29 @@ const Scoring = () => {
   useEffect(() => {
     fetchScoresForWeek(selectedWeekId);
   }, [selectedWeekId, baseClasses]);
+
+  // LOGIC LỌC VÀ XẾP HẠNG THEO KHỐI THI ĐUA (Dùng useMemo để tối ưu)
+  const displayClasses = useMemo(() => {
+    const targetGrades = activeTab === "6-7" ? [6, 7] : [8, 9];
+    const filteredBase = baseClasses.filter((cls) =>
+      targetGrades.includes(cls.grade),
+    );
+
+    const mergedClasses = filteredBase.map((cls) => {
+      const classScore = allScores.find(
+        (score) => score.classId._id === cls._id,
+      );
+      return { ...cls, scoreRecord: classScore || null };
+    });
+
+    return mergedClasses.sort((a, b) => {
+      if (a.scoreRecord && b.scoreRecord)
+        return b.scoreRecord.totalScore - a.scoreRecord.totalScore;
+      if (a.scoreRecord && !b.scoreRecord) return -1;
+      if (!a.scoreRecord && b.scoreRecord) return 1;
+      return 0;
+    });
+  }, [activeTab, baseClasses, allScores]);
 
   // --- ACTIONS CHẤM ĐIỂM ---
   const openScoringModal = (cls) => {
@@ -227,81 +232,95 @@ const Scoring = () => {
     }
   };
 
-  // --- XUẤT EXCEL GỌN GÀNG (5 CỘT CHÍNH) VỚI ĐỊNH DẠNG ĐẸP ---
+  // --- XUẤT EXCEL 2 SHEET RIÊNG BIỆT ---
   const handleExportExcel = async () => {
-    if (displayClasses.length === 0)
+    if (allScores.length === 0)
       return toast.warning("Không có dữ liệu để xuất!");
 
     try {
-      // 1. Tạo Workbook & Worksheet
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Bảng Xếp Hạng");
 
-      // 2. Định nghĩa cấu trúc 5 cột cố định
-      worksheet.columns = [
-        { header: "Hạng", key: "rank", width: 10 },
-        { header: "Tên Lớp", key: "className", width: 20 },
-        { header: "Khối", key: "grade", width: 15 },
-        { header: "Tổng Điểm", key: "totalScore", width: 15 },
-        { header: "Trạng Thái", key: "status", width: 15 },
-      ];
+      // Hàm tạo từng sheet
+      const generateSheet = (sheetName, grades) => {
+        const worksheet = workbook.addWorksheet(sheetName);
 
-      // 3. Đổ dữ liệu vào từng dòng
-      displayClasses.forEach((cls, index) => {
-        const rowData = {
-          rank: cls.scoreRecord ? index + 1 : "Chưa xếp",
-          className: cls.name,
-          grade: `Khối ${cls.grade}`,
-          totalScore: cls.scoreRecord
-            ? cls.scoreRecord.totalScore
-            : "Chưa chấm",
-          status: cls.scoreRecord ? "Đã chấm" : "Chờ chấm",
+        worksheet.columns = [
+          { header: "Hạng", key: "rank", width: 10 },
+          { header: "Tên Lớp", key: "className", width: 20 },
+          { header: "Khối", key: "grade", width: 15 },
+          { header: "Tổng Điểm", key: "totalScore", width: 15 },
+          { header: "Trạng Thái", key: "status", width: 15 },
+        ];
+
+        // Lọc và xếp hạng riêng cho Sheet này
+        const sheetClasses = baseClasses
+          .filter((cls) => grades.includes(cls.grade))
+          .map((cls) => {
+            const score = allScores.find((s) => s.classId._id === cls._id);
+            return { ...cls, scoreRecord: score || null };
+          })
+          .sort((a, b) => {
+            if (a.scoreRecord && b.scoreRecord)
+              return b.scoreRecord.totalScore - a.scoreRecord.totalScore;
+            if (a.scoreRecord && !b.scoreRecord) return -1;
+            if (!a.scoreRecord && b.scoreRecord) return 1;
+            return 0;
+          });
+
+        sheetClasses.forEach((cls, index) => {
+          worksheet.addRow({
+            rank: cls.scoreRecord ? index + 1 : "Chưa xếp",
+            className: cls.name,
+            grade: `Khối ${cls.grade}`,
+            totalScore: cls.scoreRecord
+              ? cls.scoreRecord.totalScore
+              : "Chưa chấm",
+            status: cls.scoreRecord ? "Đã chấm" : "Chờ chấm",
+          });
+        });
+
+        // Định dạng
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        headerRow.alignment = {
+          vertical: "middle",
+          horizontal: "center",
+          wrapText: true,
         };
-        worksheet.addRow(rowData);
-      });
+        headerRow.eachCell((cell) => {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FF2563EB" },
+          };
+          cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" },
+          };
+        });
 
-      // 4. ĐỊNH DẠNG (FORMATTING) CHO ĐẸP
-      // 4.1 Định dạng thanh Tiêu đề (Row 1)
-      const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } }; // Chữ trắng in đậm
-      headerRow.alignment = {
-        vertical: "middle",
-        horizontal: "center",
-        wrapText: true,
+        worksheet.eachRow((row, rowNumber) => {
+          if (rowNumber > 1) {
+            row.eachCell((cell) => {
+              cell.alignment = { vertical: "middle", horizontal: "center" };
+              cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+              };
+            });
+          }
+        });
       };
 
-      headerRow.eachCell((cell) => {
-        // Đổ nền xanh dương đậm
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FF2563EB" }, // Blue-600
-        };
-        // Kẻ khung (Borders)
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" },
-        };
-      });
+      // Tạo 2 Sheet
+      generateSheet("Thi đua Khối 6-7", [6, 7]);
+      generateSheet("Thi đua Khối 8-9", [8, 9]);
 
-      // 4.2 Định dạng các dòng Dữ liệu (Từ Row 2 trở đi)
-      worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber > 1) {
-          row.eachCell((cell) => {
-            cell.alignment = { vertical: "middle", horizontal: "center" };
-            cell.border = {
-              top: { style: "thin" },
-              left: { style: "thin" },
-              bottom: { style: "thin" },
-              right: { style: "thin" },
-            };
-          });
-        }
-      });
-
-      // 5. Lưu và Xuất File
+      // Lưu File
       const yearName =
         schoolYears.find((y) => y._id === selectedYearId)?.name || "NamHoc";
       const weekName = currentSelectedWeek?.name || "Tuan";
@@ -316,7 +335,7 @@ const Scoring = () => {
       });
       saveAs(blob, fileName);
 
-      toast.success("Đã xuất file báo cáo Excel gọn gàng và đẹp mắt!");
+      toast.success("Đã xuất file báo cáo 2 Khối thành công!");
     } catch (error) {
       console.error("Lỗi xuất Excel:", error);
       toast.error("Có lỗi xảy ra khi xuất file Excel.");
@@ -430,10 +449,10 @@ const Scoring = () => {
               </select>
             </div>
 
-            {/* NÚT XUẤT EXCEL MỚI */}
+            {/* NÚT XUẤT EXCEL */}
             <button
               onClick={handleExportExcel}
-              disabled={weeksList.length === 0 || displayClasses.length === 0}
+              disabled={weeksList.length === 0 || allScores.length === 0}
               className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors font-bold shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download size={18} /> Xuất Báo Cáo
@@ -469,7 +488,33 @@ const Scoring = () => {
         </div>
       ) : null}
 
-      {/* DANH SÁCH LỚP */}
+      {/* TABS CHUYỂN ĐỔI KHỐI THI ĐUA */}
+      {weeksList.length > 0 && (
+        <div className="flex bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm w-fit mb-2">
+          <button
+            onClick={() => setActiveTab("6-7")}
+            className={`px-6 py-2 rounded-lg font-bold transition-all ${
+              activeTab === "6-7"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            Khối 6 - 7
+          </button>
+          <button
+            onClick={() => setActiveTab("8-9")}
+            className={`px-6 py-2 rounded-lg font-bold transition-all ${
+              activeTab === "8-9"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            Khối 8 - 9
+          </button>
+        </div>
+      )}
+
+      {/* DANH SÁCH LỚP (UI GIỮ NGUYÊN) */}
       {weeksList.length > 0 && (
         <div className="flex flex-col gap-4">
           {displayClasses.map((cls, index) => {
@@ -576,7 +621,7 @@ const Scoring = () => {
         </div>
       )}
 
-      {/* MODAL CHẤM ĐIỂM */}
+      {/* MODAL CHẤM ĐIỂM (UI GIỮ NGUYÊN) */}
       {isModalOpen && !isReadOnly && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">

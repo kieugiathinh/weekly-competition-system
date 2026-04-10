@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Users,
   ListChecks,
@@ -40,20 +40,12 @@ const Dashboard = () => {
   const [selectedYearId, setSelectedYearId] = useState("");
   const [weeksList, setWeeksList] = useState([]);
   const [selectedWeekId, setSelectedWeekId] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("all"); // Lọc khối
 
   const [loading, setLoading] = useState(true);
   const [baseClasses, setBaseClasses] = useState([]);
   const [baseCriteria, setBaseCriteria] = useState([]);
-
-  const [stats, setStats] = useState({
-    totalClasses: 0,
-    totalCriteria: 0,
-    scoredClasses: 0,
-  });
-  const [topClasses, setTopClasses] = useState([]);
-  const [bottomClasses, setBottomClasses] = useState([]);
-  const [unscoredClasses, setUnscoredClasses] = useState([]);
-  const [violationData, setViolationData] = useState([]);
+  const [rankingData, setRankingData] = useState([]); // Lưu toàn bộ điểm thay vì chia state nhỏ
 
   // 1. FETCH NĂM HỌC VÀ TIÊU CHÍ
   useEffect(() => {
@@ -101,7 +93,7 @@ const Dashboard = () => {
         );
 
         setBaseClasses(classesData);
-        setWeeksList(visibleWeeks); // Chỉ lưu danh sách tuần hợp lệ
+        setWeeksList(visibleWeeks);
 
         if (visibleWeeks.length > 0) {
           const openWeek = visibleWeeks.find((w) => !w.isLocked);
@@ -110,15 +102,7 @@ const Dashboard = () => {
           );
         } else {
           setSelectedWeekId("");
-          setStats((prev) => ({
-            ...prev,
-            totalClasses: classesData.length,
-            scoredClasses: 0,
-          }));
-          setTopClasses([]);
-          setBottomClasses([]);
-          setUnscoredClasses(classesData);
-          setViolationData([]);
+          setRankingData([]);
         }
       } catch (error) {
         console.error("Lỗi khi tải dữ liệu năm học:", error);
@@ -130,59 +114,73 @@ const Dashboard = () => {
     fetchYearData();
   }, [selectedYearId]);
 
-  // 3. FETCH BẢNG ĐIỂM
+  // 3. FETCH BẢNG ĐIỂM THEO TUẦN ĐƯỢC CHỌN
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!selectedWeekId || baseClasses.length === 0) return;
+      if (!selectedWeekId || baseClasses.length === 0) {
+        setRankingData([]);
+        return;
+      }
 
       try {
         const ranking = await weeklyScoreApi.getRankingByWeek(selectedWeekId);
-
-        setStats({
-          totalClasses: baseClasses.length,
-          totalCriteria: baseCriteria.filter((c) => c.isActive).length,
-          scoredClasses: ranking.length,
-        });
-
-        const scoredClassIds = ranking.map((r) => r.classId._id);
-        const unscored = baseClasses.filter(
-          (c) => !scoredClassIds.includes(c._id),
-        );
-        setUnscoredClasses(unscored);
-
-        setTopClasses(ranking.slice(0, 5));
-        setBottomClasses([...ranking].reverse().slice(0, 5));
-
-        const violationCount = {};
-        ranking.forEach((scoreRecord) => {
-          scoreRecord.details.forEach((detail) => {
-            const crit = baseCriteria.find(
-              (c) =>
-                c._id === detail.criterionId._id ||
-                c._id === detail.criterionId,
-            );
-            if (crit && crit.type === "penalty") {
-              if (!violationCount[crit.name]) {
-                violationCount[crit.name] = 0;
-              }
-              violationCount[crit.name] += detail.quantity;
-            }
-          });
-        });
-
-        const pieData = Object.keys(violationCount)
-          .map((key) => ({ name: key, value: violationCount[key] }))
-          .sort((a, b) => b.value - a.value)
-          .slice(0, 5);
-
-        setViolationData(pieData);
+        setRankingData(ranking);
       } catch (error) {
         console.error("Lỗi khi tải bảng điểm cho Dashboard:", error);
       }
     };
 
     fetchDashboardData();
-  }, [selectedWeekId, baseClasses, baseCriteria]);
+  }, [selectedWeekId, baseClasses]);
+
+  // --- TỰ ĐỘNG TÍNH TOÁN DỮ LIỆU KHI CHUYỂN KHỐI (useMemo) ---
+  const filteredStats = useMemo(() => {
+    let classes = [...baseClasses];
+    let ranking = [...rankingData];
+
+    // Lọc theo Dropdown Khối
+    if (gradeFilter === "6-7") {
+      classes = classes.filter((c) => [6, 7].includes(c.grade));
+      ranking = ranking.filter((r) => [6, 7].includes(r.classId.grade));
+    } else if (gradeFilter === "8-9") {
+      classes = classes.filter((c) => [8, 9].includes(c.grade));
+      ranking = ranking.filter((r) => [8, 9].includes(r.classId.grade));
+    }
+
+    // Phân loại Lớp Chưa Chấm
+    const scoredClassIds = ranking.map((r) => r.classId._id);
+    const unscored = classes.filter((c) => !scoredClassIds.includes(c._id));
+
+    // Đếm lỗi vi phạm
+    const violationCount = {};
+    ranking.forEach((scoreRecord) => {
+      scoreRecord.details.forEach((detail) => {
+        const crit = baseCriteria.find(
+          (c) => c._id === (detail.criterionId._id || detail.criterionId),
+        );
+        if (crit && crit.type === "penalty") {
+          if (!violationCount[crit.name]) {
+            violationCount[crit.name] = 0;
+          }
+          violationCount[crit.name] += detail.quantity;
+        }
+      });
+    });
+
+    const pieData = Object.keys(violationCount)
+      .map((key) => ({ name: key, value: violationCount[key] }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+
+    return {
+      totalClasses: classes.length,
+      scoredClasses: ranking.length,
+      unscoredClasses: unscored,
+      top5: ranking.slice(0, 5),
+      bottom5: [...ranking].reverse().slice(0, 5),
+      violations: pieData,
+    };
+  }, [gradeFilter, baseClasses, rankingData, baseCriteria]);
 
   if (loading && schoolYears.length === 0) {
     return (
@@ -202,11 +200,27 @@ const Dashboard = () => {
               Bảng điều khiển
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Tổng quan tình hình thi đua nề nếp toàn trường.
+              Tổng quan tình hình thi đua nề nếp.
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+            {/* Lọc Khối Thi Đua */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
+                Thống kê:
+              </span>
+              <select
+                value={gradeFilter}
+                onChange={(e) => setGradeFilter(e.target.value)}
+                className="w-full sm:w-auto px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="all">Toàn trường</option>
+                <option value="6-7">Khối 6 - 7</option>
+                <option value="8-9">Khối 8 - 9</option>
+              </select>
+            </div>
+
             {/* Lọc Năm Học */}
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
@@ -234,7 +248,7 @@ const Dashboard = () => {
                 value={selectedWeekId}
                 onChange={(e) => setSelectedWeekId(e.target.value)}
                 disabled={weeksList.length === 0}
-                className="w-full sm:w-auto px-4 py-2.5 bg-blue-50/50 border border-blue-200 rounded-lg text-blue-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
+                className="w-full sm:w-auto px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
               >
                 {weeksList.length === 0 ? (
                   <option value="">Không có Tuần khả dụng</option>
@@ -272,9 +286,9 @@ const Dashboard = () => {
                 <Users size={24} />
               </div>
               <div>
-                <p className="text-sm text-gray-500 font-medium">Tổng số lớp</p>
+                <p className="text-sm text-gray-500 font-medium">Sĩ số lớp</p>
                 <h3 className="text-2xl font-bold text-gray-900">
-                  {stats.totalClasses}
+                  {filteredStats.totalClasses}
                 </h3>
               </div>
             </div>
@@ -288,7 +302,7 @@ const Dashboard = () => {
                   Tiêu chí áp dụng
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900">
-                  {stats.totalCriteria}
+                  {baseCriteria.filter((c) => c.isActive).length}
                 </h3>
               </div>
             </div>
@@ -302,9 +316,9 @@ const Dashboard = () => {
                   Đã chấm điểm
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900">
-                  {stats.scoredClasses}{" "}
+                  {filteredStats.scoredClasses}{" "}
                   <span className="text-sm font-normal text-gray-400">
-                    / {stats.totalClasses}
+                    / {filteredStats.totalClasses}
                   </span>
                 </h3>
               </div>
@@ -319,7 +333,7 @@ const Dashboard = () => {
                   Lớp chưa chấm
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900">
-                  {unscoredClasses.length}
+                  {filteredStats.unscoredClasses.length}
                 </h3>
               </div>
             </div>
@@ -331,13 +345,16 @@ const Dashboard = () => {
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm lg:col-span-2">
               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-6">
                 <Trophy className="text-yellow-500" size={20} /> Vinh danh Top 5
-                Lớp Xuất Sắc
+                Lớp Xuất Sắc{" "}
+                {gradeFilter === "all"
+                  ? "(Toàn trường)"
+                  : `(Khối ${gradeFilter})`}
               </h3>
               <div className="h-72">
-                {topClasses.length > 0 ? (
+                {filteredStats.top5.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={topClasses}
+                      data={filteredStats.top5}
                       margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                     >
                       <XAxis
@@ -365,7 +382,7 @@ const Dashboard = () => {
                         name="Tổng điểm"
                         radius={[4, 4, 0, 0]}
                       >
-                        {topClasses.map((entry, index) => (
+                        {filteredStats.top5.map((entry, index) => (
                           <Cell
                             key={`cell-${index}`}
                             fill={index === 0 ? "#3b82f6" : "#93c5fd"}
@@ -389,11 +406,11 @@ const Dashboard = () => {
                 phổ biến
               </h3>
               <div className="h-64">
-                {violationData.length > 0 ? (
+                {filteredStats.violations.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={violationData}
+                        data={filteredStats.violations}
                         cx="50%"
                         cy="50%"
                         innerRadius={60}
@@ -401,7 +418,7 @@ const Dashboard = () => {
                         paddingAngle={5}
                         dataKey="value"
                       >
-                        {violationData.map((entry, index) => (
+                        {filteredStats.violations.map((entry, index) => (
                           <Cell
                             key={`cell-${index}`}
                             fill={COLORS[index % COLORS.length]}
@@ -424,7 +441,7 @@ const Dashboard = () => {
                 )}
               </div>
               <div className="mt-2 flex flex-col gap-2 h-20 overflow-y-auto no-scrollbar">
-                {violationData.map((item, index) => (
+                {filteredStats.violations.map((item, index) => (
                   <div
                     key={index}
                     className="flex items-center justify-between text-sm"
@@ -460,15 +477,15 @@ const Dashboard = () => {
                 Top 5 Lớp Điểm Thấp Nhất (Cần đôn đốc)
               </h3>
               <div className="flex flex-col gap-3">
-                {bottomClasses.length > 0 ? (
-                  bottomClasses.map((score, index) => (
+                {filteredStats.bottom5.length > 0 ? (
+                  filteredStats.bottom5.map((score, index) => (
                     <div
                       key={score._id}
                       className="flex items-center justify-between p-3 bg-red-50/50 rounded-lg border border-red-100"
                     >
                       <div className="flex items-center gap-3">
                         <span className="w-6 text-center font-bold text-red-400">
-                          #{stats.scoredClasses - index}
+                          #{filteredStats.scoredClasses - index}
                         </span>
                         <span className="font-bold text-gray-800">
                           {score.classId.name}
@@ -491,8 +508,8 @@ const Dashboard = () => {
                 Danh sách Lớp chưa chấm điểm
               </h3>
               <div className="flex flex-col gap-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
-                {unscoredClasses.length > 0 ? (
-                  unscoredClasses.map((cls) => (
+                {filteredStats.unscoredClasses.length > 0 ? (
+                  filteredStats.unscoredClasses.map((cls) => (
                     <div
                       key={cls._id}
                       className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
