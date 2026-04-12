@@ -35,7 +35,9 @@ const Scoring = () => {
   const [allScores, setAllScores] = useState([]);
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("6-7");
+
+  // Tab mặc định giờ sẽ là Toàn trường
+  const [activeTab, setActiveTab] = useState("all");
 
   const currentSelectedWeek = weeksList.find((w) => w._id === selectedWeekId);
   const isReadOnly = currentSelectedWeek?.isLocked || false;
@@ -113,10 +115,13 @@ const Scoring = () => {
   }, [selectedWeekId, baseClasses]);
 
   const displayClasses = useMemo(() => {
-    const targetGrades = activeTab === "6-7" ? [6, 7] : [8, 9];
-    const filteredBase = baseClasses.filter((cls) =>
-      targetGrades.includes(cls.grade),
-    );
+    // Lọc theo Tab Toàn trường / 6-7 / 8-9
+    let filteredBase = baseClasses;
+    if (activeTab === "6-7") {
+      filteredBase = baseClasses.filter((cls) => [6, 7].includes(cls.grade));
+    } else if (activeTab === "8-9") {
+      filteredBase = baseClasses.filter((cls) => [8, 9].includes(cls.grade));
+    }
 
     const mergedClasses = filteredBase.map((cls) => {
       const classScore = allScores.find(
@@ -233,8 +238,10 @@ const Scoring = () => {
         });
       };
 
+      // Đảo thứ tự: Khối trước, Toàn trường nằm cuối cùng
       generateSheet("Thi đua Khối 6-7", [6, 7]);
       generateSheet("Thi đua Khối 8-9", [8, 9]);
+      generateSheet("Toàn Trường", [6, 7, 8, 9]);
 
       const yearName =
         schoolYears.find((y) => y._id === selectedYearId)?.name || "NamHoc";
@@ -250,7 +257,7 @@ const Scoring = () => {
       });
       saveAs(blob, fileName);
 
-      toast.success("Đã xuất file báo cáo 2 Khối thành công!");
+      toast.success("Đã xuất file báo cáo thành công!");
     } catch (error) {
       console.error("Lỗi xuất Excel:", error);
       toast.error("Có lỗi xảy ra khi xuất file Excel.");
@@ -357,14 +364,24 @@ const Scoring = () => {
         </div>
       ) : null}
 
-      {/* TABS CHUYỂN ĐỔI KHỐI THI ĐUA */}
+      {/* TABS CHUYỂN ĐỔI KHỐI THI ĐUA NÂNG CẤP */}
       {weeksList.length > 0 && (
         <div className="flex bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm w-fit mb-2">
+          <button
+            onClick={() => setActiveTab("all")}
+            className={`px-6 py-2 rounded-lg font-bold transition-all ${
+              activeTab === "all"
+                ? "bg-blue-50 text-blue-600 shadow-sm"
+                : "text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            Toàn trường
+          </button>
           <button
             onClick={() => setActiveTab("6-7")}
             className={`px-6 py-2 rounded-lg font-bold transition-all ${
               activeTab === "6-7"
-                ? "bg-blue-50 text-blue-600"
+                ? "bg-blue-50 text-blue-600 shadow-sm"
                 : "text-gray-500 hover:bg-gray-50"
             }`}
           >
@@ -374,7 +391,7 @@ const Scoring = () => {
             onClick={() => setActiveTab("8-9")}
             className={`px-6 py-2 rounded-lg font-bold transition-all ${
               activeTab === "8-9"
-                ? "bg-blue-50 text-blue-600"
+                ? "bg-blue-50 text-blue-600 shadow-sm"
                 : "text-gray-500 hover:bg-gray-50"
             }`}
           >
@@ -462,20 +479,20 @@ const Scoring = () => {
                       </span>
                     ) : isScored ? (
                       <>
-                        <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg">
+                        <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
                           <Edit3 size={18} />
                         </button>
                         <button
                           onClick={(e) =>
                             handleDeleteScore(e, cls.scoreRecord._id)
                           }
-                          className="p-2 text-red-500 hover:bg-red-100 rounded-lg z-10 relative"
+                          className="p-2 text-red-500 hover:bg-red-100 rounded-lg z-10 relative transition-colors"
                         >
                           <Trash2 size={18} />
                         </button>
                       </>
                     ) : (
-                      <button className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm">
+                      <button className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm transition-colors">
                         Bấm để chấm
                       </button>
                     )}

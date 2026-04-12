@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Download,
   Award,
+  Trash2, // Đã thêm icon sọt rác
 } from "lucide-react";
 import { toast } from "sonner";
 import { classApi } from "../api/classApi";
@@ -129,7 +130,6 @@ const MonthlyScoring = () => {
 
     // 3. Sắp xếp
     return mergedClasses.sort((a, b) => {
-      // FIX LỖI: Thuật toán xác định lớp "Đã chấm" chặt chẽ hơn
       const checkIsScored = (record) => {
         if (!record) return false;
         return (
@@ -156,7 +156,27 @@ const MonthlyScoring = () => {
     navigate(`/scoring/month/${selectedMonthId}/class/${classId}`);
   };
 
-  // Tính năng xuất Excel báo cáo tháng CẢI TIẾN
+  // Hàm xóa điểm tháng
+  const handleDeleteScore = async (e, scoreId) => {
+    e.stopPropagation();
+    if (isReadOnly)
+      return toast.error("Tháng này đã khóa, không thể xóa điểm!");
+    if (
+      window.confirm(
+        "Bạn có chắc muốn xóa dữ liệu điểm phong trào của lớp này?",
+      )
+    ) {
+      try {
+        await monthlyScoreApi.deleteScore(scoreId);
+        toast.success("Đã reset điểm phong trào về trạng thái Chưa chấm");
+        fetchScoresForMonth(selectedMonthId);
+      } catch (error) {
+        toast.error("Lỗi khi xóa điểm tháng");
+      }
+    }
+  };
+
+  // Tính năng xuất Excel báo cáo tháng
   const handleExportExcel = async () => {
     if (allScores.length === 0)
       return toast.warning("Không có dữ liệu để xuất!");
@@ -242,7 +262,7 @@ const MonthlyScoring = () => {
             type: "pattern",
             pattern: "solid",
             fgColor: { argb: "FF2563EB" },
-          }; // Màu Xanh đồng bộ
+          };
           cell.border = {
             top: { style: "thin" },
             left: { style: "thin" },
@@ -266,10 +286,10 @@ const MonthlyScoring = () => {
         });
       };
 
-      // TẠO 3 SHEET EXCEL
-      generateSheet("Toàn Trường", [6, 7, 8, 9]); // Thêm sheet Toàn trường
+      // Đảo thứ tự: Khối trước, Toàn trường nằm cuối cùng
       generateSheet("Khối 6-7", [6, 7]);
       generateSheet("Khối 8-9", [8, 9]);
+      generateSheet("Toàn Trường", [6, 7, 8, 9]);
 
       const yearName =
         schoolYears.find((y) => y._id === selectedYearId)?.name || "NamHoc";
@@ -433,7 +453,6 @@ const MonthlyScoring = () => {
       {monthsList.length > 0 && (
         <div className="flex flex-col gap-4">
           {displayClasses.map((cls, index) => {
-            // FIX LỖI "Đã tổng hợp": Kiểm tra xem đã có thao tác lưu điểm tháng thật chưa
             const isMonthScored =
               cls.scoreRecord &&
               (cls.scoreRecord.hasMonthlyScore === true ||
@@ -536,15 +555,26 @@ const MonthlyScoring = () => {
                     </div>
                   </div>
 
+                  {/* Nút hành động kèm theo nút Xóa khi Đã chấm */}
                   <div className="ml-6 flex gap-2">
                     {isReadOnly ? (
                       <span className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-sm font-medium border border-gray-200">
                         <Lock size={14} /> Chốt sổ
                       </span>
                     ) : isMonthScored ? (
-                      <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
-                        <Edit3 size={18} />
-                      </button>
+                      <>
+                        <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
+                          <Edit3 size={18} />
+                        </button>
+                        <button
+                          onClick={(e) =>
+                            handleDeleteScore(e, cls.scoreRecord._id)
+                          }
+                          className="p-2 text-red-500 hover:bg-red-100 rounded-lg z-10 relative transition-colors"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </>
                     ) : (
                       <button className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm whitespace-nowrap transition-colors">
                         Bấm để chấm
