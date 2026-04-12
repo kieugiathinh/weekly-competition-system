@@ -2,7 +2,7 @@ import { Criterion } from "../models/criterionModel.js";
 
 // 1. Tạo tiêu chí mới
 const createCriterionService = async (data) => {
-  const { name, type, point, isActive } = data;
+  const { name, type, point, category, scope, isActive } = data; // Thêm category và scope
 
   const criterionExists = await Criterion.findOne({ name });
   if (criterionExists) throw new Error("Tiêu chí này đã tồn tại");
@@ -22,7 +22,7 @@ const createCriterionService = async (data) => {
   return newCriterion;
 };
 
-// 2. Lấy danh sách tiêu chí (Hỗ trợ lọc theo isActive và type)
+// 2. Lấy danh sách tiêu chí (Hỗ trợ lọc theo isActive, type, VÀ BỔ SUNG scope, category)
 const getAllCriteriaService = async (query) => {
   const filter = {};
 
@@ -33,7 +33,20 @@ const getAllCriteriaService = async (query) => {
     filter.type = query.type; // Lọc thêm theo type (bonus hoặc penalty)
   }
 
-  const criteria = await Criterion.find(filter).sort({ type: 1, name: 1 });
+  // Bổ sung lọc theo phạm vi (Dùng cho trang Chấm Tuần / Chấm Tháng sau này)
+  if (query.scope) {
+    filter.scope = query.scope;
+  }
+  if (query.category) {
+    filter.category = query.category;
+  }
+
+  // Sắp xếp theo phạm vi -> phân loại -> tên để dữ liệu trả về gọn gàng
+  const criteria = await Criterion.find(filter).sort({
+    scope: -1,
+    type: 1,
+    name: 1,
+  });
   return criteria;
 };
 
@@ -66,10 +79,16 @@ const updateCriterionService = async (id, updateData) => {
     throw new Error("Tiêu chí điểm cộng thì mức điểm phải là số dương");
   }
 
+  // TIẾN HÀNH CẬP NHẬT CÁC TRƯỜNG DỮ LIỆU
   criterion.name = updateData.name || criterion.name;
   criterion.type = updateData.type || criterion.type;
   criterion.point =
     updateData.point !== undefined ? updateData.point : criterion.point;
+
+  // ĐÂY CHÍNH LÀ 2 DÒNG CÒN THIẾU KHIẾN BẠN BỊ LỖI
+  criterion.category = updateData.category || criterion.category;
+  criterion.scope = updateData.scope || criterion.scope;
+
   criterion.isActive =
     updateData.isActive !== undefined
       ? updateData.isActive

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import {
@@ -6,26 +7,21 @@ import {
   Clock,
   Trash2,
   Edit3,
-  Plus,
-  Minus,
-  AlertCircle,
-  X,
   Trophy,
   Lock,
-  Unlock,
   AlertTriangle,
   Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { classApi } from "../api/classApi";
 import { weekApi } from "../api/weekApi";
-import { criterionApi } from "../api/criterionApi";
 import { weeklyScoreApi } from "../api/weeklyScoreApi";
 import { schoolYearApi } from "../api/schoolYearApi";
-import { useAuth } from "../context/AuthContext"; // Import để kiểm tra role
+import { useAuth } from "../context/AuthContext";
 
 const Scoring = () => {
-  const { user } = useAuth(); // Lấy thông tin user
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   // --- STATES BỘ LỌC NĂM & TUẦN ---
   const [schoolYears, setSchoolYears] = useState([]);
@@ -36,14 +32,10 @@ const Scoring = () => {
 
   // --- STATES DỮ LIỆU ---
   const [baseClasses, setBaseClasses] = useState([]);
-  const [criteria, setCriteria] = useState({ bonus: [], penalty: [] });
   const [allScores, setAllScores] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("6-7");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedClass, setSelectedClass] = useState(null);
-  const [scoreDetails, setScoreDetails] = useState({});
 
   const currentSelectedWeek = weeksList.find((w) => w._id === selectedWeekId);
   const isReadOnly = currentSelectedWeek?.isLocked || false;
@@ -52,16 +44,7 @@ const Scoring = () => {
     const fetchInitData = async () => {
       try {
         setLoading(true);
-        const [criteriaData, yearsData] = await Promise.all([
-          criterionApi.getAll({ isActive: true }),
-          schoolYearApi.getAll(),
-        ]);
-
-        setCriteria({
-          bonus: criteriaData.filter((c) => c.type === "bonus"),
-          penalty: criteriaData.filter((c) => c.type === "penalty"),
-        });
-
+        const yearsData = await schoolYearApi.getAll();
         setSchoolYears(yearsData);
         if (yearsData.length > 0) {
           const currentYear =
@@ -151,69 +134,9 @@ const Scoring = () => {
     });
   }, [activeTab, baseClasses, allScores]);
 
-  const openScoringModal = (cls) => {
+  const handleGoToScoreInput = (classId) => {
     if (isReadOnly) return;
-    setSelectedClass(cls);
-    if (cls.scoreRecord) {
-      const existingDetails = {};
-      cls.scoreRecord.details.forEach((item) => {
-        existingDetails[item.criterionId._id || item.criterionId] =
-          item.quantity;
-      });
-      setScoreDetails(existingDetails);
-    } else {
-      setScoreDetails({});
-    }
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setSelectedClass(null);
-    setScoreDetails({});
-  };
-
-  const updateQuantity = (criterionId, amount) => {
-    setScoreDetails((prev) => {
-      const currentQty = prev[criterionId] || 0;
-      const newQty = Math.max(0, currentQty + amount);
-      const newDetails = { ...prev };
-      if (newQty === 0) delete newDetails[criterionId];
-      else newDetails[criterionId] = newQty;
-      return newDetails;
-    });
-  };
-
-  const handleManualInput = (criterionId, value) => {
-    setScoreDetails((prev) => {
-      const newDetails = { ...prev };
-      if (value === "" || isNaN(value) || parseInt(value) <= 0)
-        delete newDetails[criterionId];
-      else newDetails[criterionId] = parseInt(value);
-      return newDetails;
-    });
-  };
-
-  const handleSaveScore = async () => {
-    try {
-      const detailsArray = Object.keys(scoreDetails).map((key) => ({
-        criterionId: key,
-        quantity: scoreDetails[key],
-      }));
-
-      const payload = {
-        classId: selectedClass._id,
-        weekId: selectedWeekId,
-        details: detailsArray,
-      };
-
-      await weeklyScoreApi.saveScore(payload);
-      toast.success(`Đã lưu điểm cho lớp ${selectedClass.name}`);
-      closeModal();
-      fetchScoresForWeek(selectedWeekId);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Lỗi khi lưu điểm");
-    }
+    navigate(`/scoring/week/${selectedWeekId}/class/${classId}`);
   };
 
   const handleDeleteScore = async (e, scoreId) => {
@@ -334,49 +257,6 @@ const Scoring = () => {
     }
   };
 
-  const renderCriterionRow = (c) => {
-    const qty = scoreDetails[c._id] || 0;
-    return (
-      <div
-        key={c._id}
-        className="flex items-center justify-between p-3 mb-2 bg-gray-50 rounded-lg border border-gray-100"
-      >
-        <div className="flex flex-col flex-1 pr-4">
-          <span className="font-medium text-gray-800 text-sm leading-tight">
-            {c.name}
-          </span>
-          <span
-            className={`text-xs font-bold mt-1 ${c.point > 0 ? "text-green-600" : "text-red-600"}`}
-          >
-            {c.point > 0 ? `+${c.point}` : c.point} đ / lần
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
-          <button
-            onClick={() => updateQuantity(c._id, -1)}
-            className="w-7 h-7 flex items-center justify-center rounded bg-gray-50 text-gray-600 hover:bg-gray-200"
-          >
-            <Minus size={14} />
-          </button>
-          <input
-            type="number"
-            min="0"
-            value={qty === 0 ? "" : qty}
-            onChange={(e) => handleManualInput(c._id, e.target.value)}
-            className="w-10 h-7 text-center font-bold text-gray-800 bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
-            style={{ MozAppearance: "textfield" }}
-          />
-          <button
-            onClick={() => updateQuantity(c._id, 1)}
-            className="w-7 h-7 flex items-center justify-center rounded bg-blue-50 text-blue-600 hover:bg-blue-100"
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   if (loading && schoolYears.length === 0) {
     return (
       <div className="p-8 text-center text-gray-500 font-medium">
@@ -439,7 +319,6 @@ const Scoring = () => {
               </select>
             </div>
 
-            {/* CHỈ RENDER NÚT XUẤT EXCEL KHI LÀ ADMIN */}
             {user?.role === "admin" && (
               <button
                 onClick={handleExportExcel}
@@ -460,8 +339,7 @@ const Scoring = () => {
             Chưa có Tuần thi đua nào diễn ra!
           </h2>
           <p className="text-gray-500">
-            Hiện tại năm học này chưa có Tuần nào bắt đầu. Hãy quay lại sau hoặc
-            kiểm tra lịch bên mục Quản lý Tuần.
+            Hiện tại năm học này chưa có Tuần nào bắt đầu.
           </p>
         </div>
       ) : isReadOnly ? (
@@ -515,7 +393,7 @@ const Scoring = () => {
             return (
               <div
                 key={cls._id}
-                onClick={() => !isReadOnly && openScoringModal(cls)}
+                onClick={() => handleGoToScoreInput(cls._id)}
                 className={`relative flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border-2 transition-all 
                   ${isScored ? "bg-white border-green-200" : "bg-gray-50 border-gray-200 opacity-80"}
                   ${isReadOnly ? "cursor-default" : "cursor-pointer hover:shadow-md hover:border-blue-400"}
@@ -534,8 +412,7 @@ const Scoring = () => {
                             : rank === 3
                               ? "bg-orange-100 text-orange-600 border-orange-300"
                               : "bg-blue-50 text-blue-600 border-blue-200"
-                    }
-                  `}
+                    }`}
                   >
                     {isScored ? (
                       <>
@@ -607,82 +484,6 @@ const Scoring = () => {
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* MODAL CHẤM ĐIỂM */}
-      {isModalOpen && !isReadOnly && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center p-5 border-b border-gray-200 bg-gray-50 rounded-t-xl shrink-0">
-              <div>
-                <h3 className="text-xl font-bold text-gray-800">
-                  Chấm điểm lớp{" "}
-                  <span className="text-blue-600 text-2xl ml-1">
-                    {selectedClass?.name}
-                  </span>
-                </h3>
-                <p className="text-sm text-gray-500">
-                  {currentSelectedWeek?.name}
-                </p>
-              </div>
-              <button
-                onClick={closeModal}
-                className="text-gray-400 hover:text-gray-800 bg-white p-1.5 rounded-full border border-gray-200 shadow-sm"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50/50">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-                <div className="bg-white p-4 sm:p-5 rounded-xl border border-red-100 shadow-sm h-fit">
-                  <h4 className="flex items-center gap-2 font-bold text-red-600 mb-4 pb-3 border-b border-red-50 text-lg">
-                    <AlertCircle size={20} /> LỖI VI PHẠM (ĐIỂM TRỪ)
-                  </h4>
-                  <div className="flex flex-col gap-1">
-                    {criteria.penalty.length === 0 && (
-                      <p className="text-sm text-gray-400 italic">
-                        Không có tiêu chí điểm trừ.
-                      </p>
-                    )}
-                    {criteria.penalty.map(renderCriterionRow)}
-                  </div>
-                </div>
-                <div className="bg-white p-4 sm:p-5 rounded-xl border border-green-100 shadow-sm h-fit">
-                  <h4 className="flex items-center gap-2 font-bold text-green-600 mb-4 pb-3 border-b border-green-50 text-lg">
-                    <CheckCircle2 size={20} /> KHEN THƯỞNG (ĐIỂM CỘNG)
-                  </h4>
-                  <div className="flex flex-col gap-1">
-                    {criteria.bonus.length === 0 && (
-                      <p className="text-sm text-gray-400 italic">
-                        Không có tiêu chí điểm cộng.
-                      </p>
-                    )}
-                    {criteria.bonus.map(renderCriterionRow)}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="p-5 border-t border-gray-200 bg-white rounded-b-xl flex justify-between items-center shrink-0">
-              <p className="text-sm text-gray-500 italic hidden sm:block">
-                Tổng điểm sẽ được hệ thống tính tự động.
-              </p>
-              <div className="flex gap-3 w-full sm:w-auto">
-                <button
-                  onClick={closeModal}
-                  className="flex-1 sm:flex-none px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Đóng
-                </button>
-                <button
-                  onClick={handleSaveScore}
-                  className="flex-1 sm:flex-none px-6 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md"
-                >
-                  XÁC NHẬN LƯU
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       )}
     </div>

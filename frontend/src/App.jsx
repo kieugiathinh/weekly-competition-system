@@ -18,6 +18,10 @@ import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
 import Profile from "./pages/Profile";
 import UserGuide from "./pages/UserGuide";
+import Months from "./pages/Months";
+import WeeklyScoreInput from "./pages/WeeklyScoreInput";
+import MonthlyScoring from "./pages/MonthlyScoring";
+import MonthlyScoreInput from "./pages/MonthlyScoreInput";
 
 function App() {
   return (
@@ -33,15 +37,25 @@ function App() {
               <Route path="/" element={<AppLayout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="scoring" element={<Scoring />} />
+                <Route
+                  path="scoring/week/:weekId/class/:classId"
+                  element={<WeeklyScoreInput />}
+                />
                 <Route path="profile" element={<Profile />} />
                 <Route path="guide" element={<UserGuide />} />
 
                 <Route element={<AdminRoute />}>
                   <Route path="school-years" element={<SchoolYears />} />
+                  <Route path="months" element={<Months />} />
                   <Route path="classes" element={<Classes />} />
                   <Route path="criteria" element={<Criteria />} />
                   <Route path="weeks" element={<Weeks />} />
                   <Route path="users" element={<Users />} />
+                  <Route path="monthly-scoring" element={<MonthlyScoring />} />
+                  <Route
+                    path="scoring/month/:monthId/class/:classId"
+                    element={<MonthlyScoreInput />}
+                  />
                 </Route>
               </Route>
             </Route>

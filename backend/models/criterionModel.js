@@ -1,29 +1,26 @@
 import mongoose from "mongoose";
 
-const criterionSchema = mongoose.Schema(
+const criterionSchema = new mongoose.Schema(
   {
-    name: {
+    name: { type: String, required: true },
+    point: { type: Number, required: true },
+    type: { type: String, enum: ["bonus", "penalty"], required: true },
+
+    category: {
       type: String,
-      required: [true, "Vui lòng nhập tên tiêu chí (VD: Tiết A, Vệ sinh)"],
-      unique: true,
+      required: true,
+      default: "Khác",
     },
-    type: {
+
+    scope: {
       type: String,
-      enum: ["bonus", "penalty"], // Bắt buộc phải là 1 trong 2 loại này
-      required: [true, "Vui lòng chọn loại tiêu chí (Điểm cộng hoặc Điểm trừ)"],
+      enum: ["week", "month"],
+      default: "week",
     },
-    point: {
-      type: Number,
-      required: [true, "Vui lòng nhập mức điểm (VD: 10, -4)"],
-    },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
+
+    isActive: { type: Boolean, default: true },
   },
   { timestamps: true },
 );
 
-const Criterion = mongoose.model("Criterion", criterionSchema);
-
-export { Criterion };
+export const Criterion = mongoose.model("Criterion", criterionSchema);

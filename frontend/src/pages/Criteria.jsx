@@ -9,9 +9,26 @@ import {
   ChevronRight,
   CheckCircle2,
   AlertCircle,
+  Tag,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { criterionApi } from "../api/criterionApi";
+
+// DANH SÁCH DANH MỤC DỰA THEO GIAO ƯỚC THI ĐUA CỦA TRƯỜNG
+const CATEGORIES = [
+  "1. XẾP HÀNG",
+  "2. ĐỒNG PHỤC",
+  "3. GIỜ GIẤC - SĨ SỐ",
+  "4. NÓI TỤC, VÔ LỄ, ĐÁNH NHAU",
+  "5. VỆ SINH",
+  "6. HỌC TẬP (SỔ ĐẦU BÀI)",
+  "7. NỘI DUNG SINH HOẠT",
+  "8. CHĂM SÓC CÂY XANH",
+  "9. CHẤP HÀNH PHÁP LUẬT",
+  "10. THI ĐUA THÁNG (PHONG TRÀO)",
+  "Khác",
+];
 
 const Criteria = () => {
   const [criteria, setCriteria] = useState([]);
@@ -19,11 +36,12 @@ const Criteria = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  // Mặc định tạo mới là Điểm trừ (vì trường học đa số là vi phạm)
   const [formData, setFormData] = useState({
     name: "",
     type: "penalty",
     point: "",
+    category: "1. XẾP HÀNG",
+    scope: "week",
     isActive: true,
   });
 
@@ -47,14 +65,23 @@ const Criteria = () => {
     fetchCriteria();
   }, []);
 
-  // Lọc theo cả Tên và Loại tiêu chí
-  const filteredCriteria = criteria.filter((c) =>
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  // 1. CẬP NHẬT LOGIC: Filter kết hợp Sort theo Category
+  const filteredAndSortedCriteria = criteria
+    .filter(
+      (c) =>
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.category &&
+          c.category.toLowerCase().includes(searchTerm.toLowerCase())),
+    )
+    .sort((a, b) => {
+      const catA = a.category || "";
+      const catB = b.category || "";
+      return catA.localeCompare(catB); // Sắp xếp theo ABC của Danh mục
+    });
 
-  const totalPages = Math.ceil(filteredCriteria.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredAndSortedCriteria.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentItems = filteredCriteria.slice(
+  const currentItems = filteredAndSortedCriteria.slice(
     startIndex,
     startIndex + itemsPerPage,
   );
@@ -70,11 +97,20 @@ const Criteria = () => {
         name: item.name,
         type: item.type,
         point: item.point,
+        category: item.category || "Khác",
+        scope: item.scope || "week",
         isActive: item.isActive,
       });
     } else {
       setEditingId(null);
-      setFormData({ name: "", type: "penalty", point: "", isActive: true });
+      setFormData({
+        name: "",
+        type: "penalty",
+        point: "",
+        category: "1. XẾP HÀNG",
+        scope: "week",
+        isActive: true,
+      });
     }
     setIsModalOpen(true);
   };
@@ -82,58 +118,39 @@ const Criteria = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
-    setFormData({ name: "", type: "penalty", point: "", isActive: true });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name.trim() || formData.point === "") {
-      toast.warning("Vui lòng nhập đủ tên và mức điểm");
-      return;
-    }
-
-    const pointValue = Number(formData.point);
-
-    // Validate UX: Cảnh báo nếu nhập sai logic âm dương
-    if (formData.type === "penalty" && pointValue > 0) {
-      toast.warning("Điểm trừ phải là số âm (VD: -5)");
-      return;
-    }
-    if (formData.type === "bonus" && pointValue < 0) {
-      toast.warning("Điểm cộng phải là số dương (VD: 10)");
+      toast.warning("Vui lòng nhập đủ thông tin");
       return;
     }
 
     try {
-      const dataToSubmit = { ...formData, point: pointValue };
+      const dataToSubmit = { ...formData, point: Number(formData.point) };
       if (editingId) {
         await criterionApi.update(editingId, dataToSubmit);
-        toast.success("Cập nhật tiêu chí thành công");
+        toast.success("Cập nhật thành công");
       } else {
         await criterionApi.create(dataToSubmit);
-        toast.success("Thêm tiêu chí mới thành công");
+        toast.success("Thêm mới thành công");
       }
       closeModal();
       fetchCriteria();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Có lỗi xảy ra khi lưu");
+      toast.error(error.response?.data?.message || "Lỗi khi lưu dữ liệu");
     }
   };
 
   const handleDelete = async (id) => {
-    if (
-      window.confirm(
-        "Cảnh báo: Nếu bạn xóa cứng, các bảng điểm cũ có tiêu chí này có thể bị lỗi.\n\nKhuyên dùng: Nên bấm 'Sửa' và tắt trạng thái Hoạt động thay vì Xóa.\n\nBạn vẫn muốn tiếp tục xóa?",
-      )
-    ) {
+    if (window.confirm("Bạn có chắc chắn muốn xóa tiêu chí này?")) {
       try {
         await criterionApi.delete(id);
-        toast.success("Xóa tiêu chí thành công");
+        toast.success("Xóa thành công");
         fetchCriteria();
       } catch (error) {
-        toast.error(
-          error.response?.data?.message || "Không thể xóa tiêu chí này",
-        );
+        toast.error("Không thể xóa tiêu chí này");
       }
     }
   };
@@ -144,7 +161,7 @@ const Criteria = () => {
         <div>
           <h2 className="text-xl font-bold text-gray-800">Tiêu chí Thi đua</h2>
           <p className="text-sm text-gray-500 mt-1">
-            Quản lý các lỗi vi phạm và điểm thưởng.
+            Chuẩn hóa danh mục chấm điểm Tuần & Tháng.
           </p>
         </div>
 
@@ -155,7 +172,7 @@ const Criteria = () => {
             </span>
             <input
               type="text"
-              placeholder="Tìm tiêu chí..."
+              placeholder="Tìm tên hoặc danh mục..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full sm:w-64 h-10 pl-10 pr-4 text-sm border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
@@ -178,9 +195,9 @@ const Criteria = () => {
             <tr className="bg-gray-50 text-gray-500 text-sm border-b border-gray-200">
               <th className="px-6 py-4 font-medium">STT</th>
               <th className="px-6 py-4 font-medium">Tên tiêu chí</th>
-              <th className="px-6 py-4 font-medium">Phân loại</th>
+              <th className="px-6 py-4 font-medium">Danh mục</th>
+              <th className="px-6 py-4 font-medium">Phạm vi</th>
               <th className="px-6 py-4 font-medium">Mức điểm</th>
-              <th className="px-6 py-4 font-medium">Trạng thái</th>
               <th className="px-6 py-4 font-medium text-right">Hành động</th>
             </tr>
           </thead>
@@ -188,15 +205,13 @@ const Criteria = () => {
             {loading ? (
               <tr>
                 <td colSpan="6" className="text-center py-8 text-gray-500">
-                  Đang tải dữ liệu...
+                  Đang tải...
                 </td>
               </tr>
             ) : currentItems.length === 0 ? (
               <tr>
                 <td colSpan="6" className="text-center py-8 text-gray-500">
-                  {searchTerm
-                    ? "Không tìm thấy tiêu chí nào."
-                    : "Chưa có dữ liệu."}
+                  Chưa có dữ liệu.
                 </td>
               </tr>
             ) : (
@@ -208,37 +223,35 @@ const Criteria = () => {
                   <td className="px-6 py-4 text-gray-600">
                     {startIndex + index + 1}
                   </td>
-                  <td className="px-6 py-4 font-medium text-gray-800">
+
+                  {/* 2. CẬP NHẬT UI: Giới hạn chiều dài tên, thêm dấu ... và title hover */}
+                  <td
+                    className="px-6 py-4 font-medium text-gray-800 max-w-[200px] md:max-w-[300px] truncate"
+                    title={c.name}
+                  >
                     {c.name}
                   </td>
+
                   <td className="px-6 py-4">
-                    {c.type === "bonus" ? (
-                      <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                        <CheckCircle2 size={16} /> Điểm cộng
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-red-600 text-sm font-medium">
-                        <AlertCircle size={16} /> Điểm trừ
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`font-bold ${c.point > 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {c.point > 0 ? `+${c.point}` : c.point}
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-md border border-purple-100 italic">
+                      <Tag size={12} /> {c.category || "Khác"}
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    {c.isActive ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                        Đang dùng
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                        Tạm ẩn
-                      </span>
-                    )}
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${c.scope === "week" ? "bg-blue-50 text-blue-700 border-blue-100" : "bg-orange-50 text-orange-700 border-orange-100"}`}
+                    >
+                      {c.scope === "week" ? "Chấm Tuần" : "Chấm Tháng"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 font-bold text-sm">
+                    <span
+                      className={
+                        c.point > 0 ? "text-green-600" : "text-red-600"
+                      }
+                    >
+                      {c.point > 0 ? `+${c.point}` : c.point}
+                    </span>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button
@@ -268,11 +281,14 @@ const Criteria = () => {
             <span className="font-medium text-gray-900">{startIndex + 1}</span>{" "}
             đến{" "}
             <span className="font-medium text-gray-900">
-              {Math.min(startIndex + itemsPerPage, filteredCriteria.length)}
+              {Math.min(
+                startIndex + itemsPerPage,
+                filteredAndSortedCriteria.length,
+              )}
             </span>{" "}
             /{" "}
             <span className="font-medium text-gray-900">
-              {filteredCriteria.length}
+              {filteredAndSortedCriteria.length}
             </span>
           </span>
           <div className="flex items-center gap-2">
@@ -281,21 +297,8 @@ const Criteria = () => {
               disabled={currentPage === 1}
               className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             >
-              <ChevronLeft size={18} className="text-gray-600" />
+              <ChevronLeft size={18} />
             </button>
-            <div className="flex gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium ${currentPage === page ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
-                  >
-                    {page}
-                  </button>
-                ),
-              )}
-            </div>
             <button
               onClick={() =>
                 setCurrentPage((prev) => Math.min(prev + 1, totalPages))
@@ -303,19 +306,19 @@ const Criteria = () => {
               disabled={currentPage === totalPages}
               className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             >
-              <ChevronRight size={18} className="text-gray-600" />
+              <ChevronRight size={18} />
             </button>
           </div>
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal Thêm/Sửa */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center p-5 border-b border-gray-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-gray-50/50">
               <h3 className="text-lg font-bold text-gray-800">
-                {editingId ? "Cập nhật Tiêu chí" : "Thêm Tiêu chí"}
+                {editingId ? "Cập nhật Tiêu chí" : "Thêm Tiêu chí Mới"}
               </h3>
               <button
                 onClick={closeModal}
@@ -325,25 +328,26 @@ const Criteria = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-5">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tên tiêu chí (Lỗi/Khen thưởng)
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
-                  placeholder="VD: Không đeo khăn quàng, Tiết A..."
-                />
-              </div>
-
-              <div className="flex gap-4 mb-4">
-                <div className="w-1/2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+            <form onSubmit={handleSubmit} className="p-5 space-y-4">
+              {/* Scope & Type */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Phạm vi áp dụng
+                  </label>
+                  <select
+                    value={formData.scope}
+                    onChange={(e) =>
+                      setFormData({ ...formData, scope: e.target.value })
+                    }
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm"
+                  >
+                    <option value="week">Chấm hàng tuần</option>
+                    <option value="month">Chấm phong trào tháng</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                     Loại tiêu chí
                   </label>
                   <select
@@ -351,14 +355,54 @@ const Criteria = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, type: e.target.value })
                     }
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm"
                   >
-                    <option value="penalty">Điểm trừ</option>
-                    <option value="bonus">Điểm cộng</option>
+                    <option value="penalty">Điểm trừ (Vi phạm)</option>
+                    <option value="bonus">Điểm cộng (Khen thưởng)</option>
                   </select>
                 </div>
-                <div className="w-1/2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                  Danh mục nhóm
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm"
+                >
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Name */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                  Tên tiêu chí
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none text-sm"
+                  placeholder="VD: Không đeo khăn quàng, Lao động không đạt..."
+                />
+              </div>
+
+              {/* Point & Status */}
+              <div className="grid grid-cols-2 gap-4 items-end">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                     Mức điểm
                   </label>
                   <input
@@ -367,34 +411,30 @@ const Criteria = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, point: e.target.value })
                     }
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none text-sm"
                     placeholder={
                       formData.type === "penalty" ? "VD: -5" : "VD: 10"
                     }
                   />
                 </div>
+                <div className="pb-2">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.isActive}
+                      onChange={(e) =>
+                        setFormData({ ...formData, isActive: e.target.checked })
+                      }
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm font-medium text-gray-700">
+                      Đang hoạt động
+                    </span>
+                  </label>
+                </div>
               </div>
 
-              <div className="mb-6">
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isActive}
-                    onChange={(e) =>
-                      setFormData({ ...formData, isActive: e.target.checked })
-                    }
-                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">
-                    Trạng thái hoạt động
-                  </span>
-                </label>
-                <p className="text-xs text-gray-500 mt-1 ml-6">
-                  (Bỏ tick nếu tiêu chí này không còn áp dụng, thay vì xóa nó).
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={closeModal}
@@ -404,7 +444,7 @@ const Criteria = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                  className="px-6 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md"
                 >
                   Lưu lại
                 </button>

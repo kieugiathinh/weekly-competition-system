@@ -38,6 +38,11 @@ const createWeekService = async (data) => {
     );
   }
 
+  // ĐÂY LÀ PHẦN FIX LỖI 400: TỰ ĐỘNG TÍNH TOÁN weekNumber
+  const existingWeeksCount = await Week.countDocuments({ schoolYearId });
+  data.weekNumber = existingWeeksCount + 1; // Gán số thứ tự tự động
+
+  // Tiến hành lưu vào Database
   const newWeek = await Week.create(data);
   return newWeek;
 };
@@ -133,8 +138,6 @@ const updateWeekService = async (id, updateData) => {
 const deleteWeekService = async (id) => {
   const weekData = await Week.findById(id);
   if (!weekData) throw new Error("Không tìm thấy Tuần thi đua");
-
-  // TODO: Tương lai nếu tuần này đã có điểm (liên kết bảng score), chặn xóa tại đây.
 
   await weekData.deleteOne();
   return { message: "Đã xóa Tuần thi đua thành công" };

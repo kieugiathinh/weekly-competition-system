@@ -145,10 +145,12 @@ import {
   Users,
   ListChecks,
   Calendar,
+  CalendarDays,
   CalendarRange,
   ShieldCheck,
   MoreHorizontal,
   BookOpen,
+  Award,
 } from "lucide-react";
 
 import logo from "../assets/logothcstranphu.jpg";
@@ -156,6 +158,11 @@ import logo from "../assets/logothcstranphu.jpg";
 const navItems = [
   { name: "Bảng điều khiển", icon: <LayoutDashboard size={20} />, path: "/" },
   { name: "Chấm điểm tuần", icon: <PenTool size={20} />, path: "/scoring" },
+  {
+    name: "Chấm điểm tháng",
+    icon: <Award size={20} />,
+    path: "/monthly-scoring",
+  },
   { name: "Quản lý Lớp học", icon: <Users size={20} />, path: "/classes" },
   {
     name: "Quản lý Tiêu chí",
@@ -163,6 +170,7 @@ const navItems = [
     path: "/criteria",
   },
   { name: "Quản lý Tuần", icon: <CalendarRange size={20} />, path: "/weeks" },
+  { name: "Quản lý Tháng", icon: <CalendarDays size={20} />, path: "/months" },
   {
     name: "Quản lý Năm học",
     icon: <Calendar size={20} />,
