@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ShieldAlert,
   Info,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { criterionApi } from "../api/criterionApi";
@@ -25,14 +26,11 @@ const MonthlyScoreInput = () => {
   const [monthData, setMonthData] = useState(null);
   const [criteria, setCriteria] = useState([]);
 
-  // Điểm từ các tuần (lấy từ API ranking tháng)
   const [totalWeekPoint, setTotalWeekPoint] = useState(0);
 
-  // Lưu state ban đầu để so sánh (Dirty check)
   const [initialScoreDetails, setInitialScoreDetails] = useState({});
-  const [scoreDetails, setScoreDetails] = useState({}); // { criterionId: quantity }
+  const [scoreDetails, setScoreDetails] = useState({});
 
-  // 1. TẢI DỮ LIỆU BAN ĐẦU
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -56,7 +54,6 @@ const MonthlyScoreInput = () => {
         setMonthData(mon);
         setCriteria(critData);
 
-        // Tìm thông tin lớp trong bảng xếp hạng tháng để lấy điểm tuần và điểm tháng hiện có
         const classRanking = ranking.find((r) => r.classId._id === classId);
         if (classRanking) {
           setTotalWeekPoint(classRanking.totalWeekPoint || 0);
@@ -64,7 +61,9 @@ const MonthlyScoreInput = () => {
           const details = {};
           if (classRanking.monthlyDetails) {
             classRanking.monthlyDetails.forEach((d) => {
-              details[d.criterionId._id || d.criterionId] = d.quantity;
+              if (d.criterionId) {
+                details[d.criterionId._id || d.criterionId] = d.quantity;
+              }
             });
           }
           setScoreDetails(details);
@@ -81,9 +80,11 @@ const MonthlyScoreInput = () => {
     fetchData();
   }, [monthId, classId, navigate]);
 
-  // 2. KIỂM TRA TRẠNG THÁI CHƯA LƯU
   const isDirty =
     JSON.stringify(scoreDetails) !== JSON.stringify(initialScoreDetails);
+
+  // BIẾN KHÓA SỔ
+  const isReadOnly = monthData?.isLocked;
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
@@ -106,7 +107,6 @@ const MonthlyScoreInput = () => {
     navigate("/monthly-scoring");
   };
 
-  // 3. LOGIC GOM NHÓM TIÊU CHÍ (SCOPE = MONTH)
   const groupedCriteria = useMemo(() => {
     const groups = criteria.reduce((acc, item) => {
       const cat = item.category || "KHÁC";
@@ -126,7 +126,6 @@ const MonthlyScoreInput = () => {
     return Object.keys(groupedCriteria).sort((a, b) => a.localeCompare(b));
   }, [groupedCriteria]);
 
-  // 4. TÍNH TOÁN ĐIỂM
   const monthlyTotal = useMemo(() => {
     return Object.keys(scoreDetails).reduce((total, critId) => {
       const crit = criteria.find((c) => c._id === critId);
@@ -137,8 +136,8 @@ const MonthlyScoreInput = () => {
 
   const finalScore = totalWeekPoint + monthlyTotal;
 
-  // 5. THAO TÁC NHẬP LIỆU
   const updateQty = (id, amount) => {
+    if (isReadOnly) return;
     setScoreDetails((prev) => {
       const newQty = (prev[id] || 0) + amount;
       const next = { ...prev };
@@ -149,6 +148,7 @@ const MonthlyScoreInput = () => {
   };
 
   const handleManualInput = (id, value) => {
+    if (isReadOnly) return;
     setScoreDetails((prev) => {
       const next = { ...prev };
       const parsedValue = parseInt(value, 10);
@@ -160,10 +160,12 @@ const MonthlyScoreInput = () => {
 
   const handleSave = async () => {
     try {
-      const detailsArray = Object.keys(scoreDetails).map((id) => ({
-        criterionId: id,
-        quantity: scoreDetails[id],
-      }));
+      const detailsArray = Object.keys(scoreDetails)
+        .filter((id) => id !== "undefined" && id !== "null")
+        .map((id) => ({
+          criterionId: id,
+          quantity: scoreDetails[id],
+        }));
 
       await monthlyScoreApi.saveScore({
         classId,
@@ -188,7 +190,7 @@ const MonthlyScoreInput = () => {
 
   return (
     <div className="font-sans space-y-6 w-full pb-24">
-      {/* HEADER TƯƠNG TỰ CÁC TRANG KHÁC NHƯNG DÙNG TÔNG TÍM */}
+      {/* HEADER ĐỒNG BỘ MÀU XANH */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 sticky top-4 z-30">
         <div className="flex items-center gap-4">
           <button
@@ -199,9 +201,9 @@ const MonthlyScoreInput = () => {
           </button>
           <div>
             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              Phiếu điểm tháng lớp{" "}
-              <span className="text-purple-600">{classData?.name}</span>
-              <span className="px-2.5 py-0.5 bg-purple-50 text-purple-700 text-xs rounded border border-purple-100 uppercase">
+              Phiếu điểm tháng Lớp{" "}
+              <span className="text-blue-600">{classData?.name}</span>
+              <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded border border-blue-100">
                 {monthData?.name}
               </span>
             </h2>
@@ -211,13 +213,12 @@ const MonthlyScoreInput = () => {
           </div>
         </div>
 
-        {/* KHU VỰC THỐNG KÊ ĐIỂM TỔNG HỢP THÁNG */}
         <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
-          <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 flex-1 lg:flex-none">
-            <span className="block text-[10px] text-blue-500 font-bold uppercase tracking-tight">
+          <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-200 flex-1 lg:flex-none">
+            <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-tight">
               Điểm các tuần
             </span>
-            <span className="text-xl font-bold text-blue-700">
+            <span className="text-xl font-bold text-gray-700">
               {totalWeekPoint}
             </span>
           </div>
@@ -231,8 +232,8 @@ const MonthlyScoreInput = () => {
               {monthlyTotal > 0 ? `+${monthlyTotal}` : monthlyTotal}
             </span>
           </div>
-          <div className="bg-purple-600 px-6 py-2 rounded-lg border border-purple-700 flex-1 lg:flex-none shadow-sm shadow-purple-200">
-            <span className="block text-[10px] text-purple-100 font-bold uppercase tracking-tight">
+          <div className="bg-blue-600 px-6 py-2 rounded-lg border border-blue-700 flex-1 lg:flex-none shadow-sm shadow-blue-200">
+            <span className="block text-[10px] text-blue-100 font-bold uppercase tracking-tight">
               TỔNG KẾT THÁNG
             </span>
             <span className="text-2xl font-black text-white">{finalScore}</span>
@@ -240,18 +241,32 @@ const MonthlyScoreInput = () => {
         </div>
       </div>
 
-      {/* LƯU Ý CHO NGƯỜI DÙNG */}
-      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
-        <Info className="text-blue-500 shrink-0 mt-0.5" size={20} />
-        <p className="text-sm text-blue-800">
-          Trang này chỉ dùng để nhập các đầu điểm phát sinh trong tháng (Lao
-          động, Phong trào, Thi đua...).
-          <strong> Điểm các tuần</strong> đã được hệ thống tự động cộng dồn từ
-          dữ liệu chấm điểm tuần.
-        </p>
-      </div>
+      {/* HIỂN THỊ BANNER CẢNH BÁO NẾU ĐÃ KHÓA */}
+      {isReadOnly ? (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-start gap-3 shadow-sm animate-in fade-in">
+          <Lock className="text-orange-500 shrink-0 mt-0.5" size={20} />
+          <div>
+            <h4 className="font-bold text-orange-800">
+              Tháng đã chốt sổ (Chỉ xem)
+            </h4>
+            <p className="text-sm text-orange-700 mt-1">
+              Tháng này đã khóa, bạn không thể thay đổi dữ liệu điểm.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
+          <Info className="text-blue-500 shrink-0 mt-0.5" size={20} />
+          <p className="text-sm text-blue-800">
+            Trang này chỉ dùng để nhập các đầu điểm phát sinh trong tháng (Lao
+            động, Phong trào, Thi đua...).
+            <strong> Điểm các tuần</strong> đã được hệ thống tự động cộng dồn từ
+            dữ liệu chấm điểm tuần.
+          </p>
+        </div>
+      )}
 
-      {/* DANH SÁCH TIÊU CHÍ THÁNG */}
+      {/* DANH SÁCH TIÊU CHÍ (CHUNG 1 KHUNG LỚN NHƯ TUẦN) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {sortedCategoryNames.length === 0 ? (
           <div className="p-12 text-center">
@@ -266,7 +281,7 @@ const MonthlyScoreInput = () => {
               <div
                 className={`bg-gray-50 px-6 py-4 flex items-center gap-2 ${index > 0 ? "border-t border-gray-200" : ""}`}
               >
-                <CheckCircle2 size={18} className="text-purple-600" />
+                <CheckCircle2 size={18} className="text-blue-600" />
                 <h3 className="font-bold text-gray-800 text-base uppercase">
                   {categoryName}
                 </h3>
@@ -278,7 +293,7 @@ const MonthlyScoreInput = () => {
                   return (
                     <div
                       key={crit._id}
-                      className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-purple-50/20 transition-colors"
+                      className={`p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 ${isReadOnly ? "opacity-80" : "hover:bg-blue-50/30 transition-colors"}`}
                     >
                       <div className="flex-1">
                         <h4 className="font-medium text-gray-800">
@@ -294,10 +309,14 @@ const MonthlyScoreInput = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1 shadow-sm w-fit self-start md:self-center focus-within:border-purple-400 focus-within:ring-1 focus-within:ring-purple-400 transition-all">
+                      {/* Khung điều chỉnh số lượng (Cho phép nhập tay) */}
+                      <div
+                        className={`flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1 shadow-sm w-fit self-start md:self-center ${isReadOnly ? "bg-gray-50" : "focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 transition-all"}`}
+                      >
                         <button
                           onClick={() => updateQty(crit._id, -1)}
-                          className="w-9 h-9 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                          disabled={isReadOnly}
+                          className="w-9 h-9 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           <Minus size={18} />
                         </button>
@@ -305,17 +324,20 @@ const MonthlyScoreInput = () => {
                         <input
                           type="number"
                           min="0"
+                          disabled={isReadOnly}
                           value={qty === 0 ? "" : qty}
                           onChange={(e) =>
                             handleManualInput(crit._id, e.target.value)
                           }
                           placeholder="0"
-                          className="w-12 h-9 text-center text-lg font-bold text-purple-600 bg-transparent outline-none"
+                          className="w-12 h-9 text-center text-lg font-bold text-blue-600 bg-transparent outline-none focus:outline-none disabled:opacity-70 disabled:cursor-not-allowed [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          style={{ MozAppearance: "textfield" }}
                         />
 
                         <button
                           onClick={() => updateQty(crit._id, 1)}
-                          className="w-9 h-9 flex items-center justify-center rounded-md bg-purple-50 text-purple-600 hover:bg-purple-100"
+                          disabled={isReadOnly}
+                          className="w-9 h-9 flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-50 disabled:bg-transparent disabled:cursor-not-allowed transition-colors"
                         >
                           <Plus size={18} />
                         </button>
@@ -329,7 +351,7 @@ const MonthlyScoreInput = () => {
         )}
       </div>
 
-      {/* FOOTER CỐ ĐỊNH */}
+      {/* FOOTER CỐ ĐỊNH CHỨA NÚT LƯU */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 transition-all duration-300 lg:pl-[310px]">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <p className="hidden md:flex text-sm text-gray-500 font-medium items-center gap-1.5">
@@ -348,16 +370,18 @@ const MonthlyScoreInput = () => {
           <div className="flex gap-3 w-full md:w-auto">
             <button
               onClick={handleGoBack}
-              className="flex-1 md:flex-none px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="flex-1 md:flex-none px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Hủy bỏ
+              Quay lại
             </button>
-            <button
-              onClick={handleSave}
-              className="flex-1 md:flex-none px-8 py-2.5 text-sm font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 shadow-sm flex items-center justify-center gap-2"
-            >
-              <Save size={18} /> LƯU ĐIỂM THÁNG
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={handleSave}
+                className="flex-1 md:flex-none px-8 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm flex items-center justify-center gap-2 transition-colors"
+              >
+                <Save size={18} /> LƯU BẢNG ĐIỂM THÁNG
+              </button>
+            )}
           </div>
         </div>
       </div>

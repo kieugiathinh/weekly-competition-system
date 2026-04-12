@@ -33,7 +33,6 @@ const Months = () => {
     isLocked: false,
   });
 
-  // KIỂM TRA NĂM HỌC CŨ (Đồng bộ với Weeks.jsx)
   const currentYearObj = schoolYears.find((y) => y._id === selectedYearId);
   const isPastYear = currentYearObj && !currentYearObj.isCurrent;
 
@@ -76,7 +75,6 @@ const Months = () => {
     fetchMonths();
   }, [selectedYearId]);
 
-  // Lọc tìm kiếm
   const filteredMonths = months.filter((m) =>
     m.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
@@ -109,7 +107,6 @@ const Months = () => {
     setEditingId(null);
   };
 
-  // FIX LỖI "Cannot read properties of null (reading '_id')"
   const availableWeeksForForm = allWeeks.filter((w) => {
     const weekYearId = w.schoolYearId?._id || w.schoolYearId;
     return weekYearId === formData.schoolYearId;
@@ -165,7 +162,6 @@ const Months = () => {
     }
   };
 
-  // Nút Khóa/Mở sổ nhanh (Đồng bộ logic Weeks.jsx)
   const toggleLock = async (id, currentStatus) => {
     if (isPastYear) return;
 
@@ -182,13 +178,14 @@ const Months = () => {
       );
       fetchMonths();
     } catch (error) {
-      toast.error("Lỗi khi thay đổi trạng thái");
+      toast.error(
+        error.response?.data?.message || "Lỗi khi thay đổi trạng thái",
+      );
     }
   };
 
   return (
     <div className="font-sans space-y-6 w-full">
-      {/* HEADER & LỌC NĂM HỌC */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-800">
@@ -217,7 +214,6 @@ const Months = () => {
         </div>
       </div>
 
-      {/* CẢNH BÁO NĂM CŨ */}
       {isPastYear && (
         <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-start gap-3 shadow-sm">
           <Lock className="text-orange-500 shrink-0 mt-0.5" size={20} />
@@ -234,7 +230,6 @@ const Months = () => {
         </div>
       )}
 
-      {/* TOOLBAR TÌM KIẾM & NÚT THÊM */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="relative w-full sm:w-64">
@@ -261,7 +256,6 @@ const Months = () => {
           )}
         </div>
 
-        {/* DANH SÁCH THÁNG (GRID) */}
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-gray-50/30">
           {loading ? (
             <div className="col-span-full text-center py-8 text-gray-500">
@@ -299,8 +293,8 @@ const Months = () => {
                     </div>
                   </div>
 
-                  {/* Hành động Sửa/Xóa (Ẩn nếu năm cũ) */}
-                  {!isPastYear && (
+                  {/* ẨN NÚT SỬA/XÓA NẾU THÁNG ĐÃ KHÓA */}
+                  {!isPastYear && !month.isLocked && (
                     <div className="flex gap-1">
                       <button
                         onClick={() => openModal(month)}
@@ -318,7 +312,6 @@ const Months = () => {
                   )}
                 </div>
 
-                {/* Danh sách tuần */}
                 <div className="border-t border-gray-100 pt-4 flex-1">
                   <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
                     <CheckSquare size={16} className="text-blue-500" /> Các tuần
@@ -342,7 +335,6 @@ const Months = () => {
                   </div>
                 </div>
 
-                {/* Nút Khóa/Mở (Nằm ở đáy Card) */}
                 <div className="mt-5 pt-4 border-t border-gray-100">
                   <button
                     onClick={() => toggleLock(month._id, month.isLocked)}
@@ -373,7 +365,6 @@ const Months = () => {
         </div>
       </div>
 
-      {/* Modal Thêm/Sửa */}
       {isModalOpen && !isPastYear && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -436,7 +427,6 @@ const Months = () => {
                   </div>
                 </div>
 
-                {/* Bảng chọn Tuần */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex justify-between items-center">
                     <span>Chọn các Tuần thuộc Tháng này</span>

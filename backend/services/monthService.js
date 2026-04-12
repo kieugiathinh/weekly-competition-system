@@ -11,6 +11,17 @@ const createMonthService = async (data) => {
   const nameExists = await Month.findOne({ name, schoolYearId });
   if (nameExists) throw new Error(`"${name}" đã tồn tại trong năm học này`);
 
+  // LOGIC 1: CHỈ CHO PHÉP 1 THÁNG MỞ (Đang chấm điểm)
+  // Nếu Admin tạo một tháng mới và chọn trạng thái là "Đang mở" (isLocked = false)
+  if (!isLocked) {
+    const openMonth = await Month.findOne({ schoolYearId, isLocked: false });
+    if (openMonth) {
+      throw new Error(
+        `Tháng "${openMonth.name}" đang mở. Vui lòng khóa lại trước khi mở tháng mới!`,
+      );
+    }
+  }
+
   const newMonth = await Month.create(data);
   return newMonth;
 };
@@ -55,6 +66,21 @@ const updateMonthService = async (id, updateData) => {
       _id: { $ne: id },
     });
     if (nameExists) throw new Error(`"${checkName}" đã tồn tại`);
+  }
+
+  // LOGIC 1: CHỈ CHO PHÉP 1 THÁNG MỞ (Khi update / mở khóa)
+  // Nếu Admin cố tình bấm mở khóa (isLocked = false) cho một tháng cũ
+  if (updateData.isLocked === false) {
+    const openMonth = await Month.findOne({
+      schoolYearId: checkYearId,
+      isLocked: false,
+      _id: { $ne: id }, // Bỏ qua chính nó
+    });
+    if (openMonth) {
+      throw new Error(
+        `Tháng "${openMonth.name}" đang mở. Vui lòng khóa lại trước khi mở tháng này!`,
+      );
+    }
   }
 
   monthData.name = checkName;

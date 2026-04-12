@@ -15,8 +15,8 @@ import {
 import { toast } from "sonner";
 import { criterionApi } from "../api/criterionApi";
 
-// DANH SÁCH DANH MỤC DỰA THEO GIAO ƯỚC THI ĐUA CỦA TRƯỜNG
-const CATEGORIES = [
+// 1. TÁCH THÀNH 2 MẢNG DANH MỤC ĐỘNG VÀ ĐÁNH SỐ THỨ TỰ
+const WEEK_CATEGORIES = [
   "1. XẾP HÀNG",
   "2. ĐỒNG PHỤC",
   "3. GIỜ GIẤC - SĨ SỐ",
@@ -26,7 +26,13 @@ const CATEGORIES = [
   "7. NỘI DUNG SINH HOẠT",
   "8. CHĂM SÓC CÂY XANH",
   "9. CHẤP HÀNH PHÁP LUẬT",
-  "10. THI ĐUA THÁNG (PHONG TRÀO)",
+  "Khác",
+];
+
+const MONTH_CATEGORIES = [
+  "1. LAO ĐỘNG",
+  "2. THAM GIA TRÒ CHƠI, HỘI THI",
+  "3. THAM GIA CUỘC THI DO HĐĐ PHÁT ĐỘNG",
   "Khác",
 ];
 
@@ -40,8 +46,8 @@ const Criteria = () => {
     name: "",
     type: "penalty",
     point: "",
-    category: "1. XẾP HÀNG",
-    scope: "week", // 'week' hoặc 'month'
+    category: WEEK_CATEGORIES[0],
+    scope: "week",
     isActive: true,
   });
 
@@ -65,15 +71,22 @@ const Criteria = () => {
     fetchCriteria();
   }, []);
 
-  const filteredCriteria = criteria.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.category.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const filteredAndSortedCriteria = criteria
+    .filter(
+      (c) =>
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.category &&
+          c.category.toLowerCase().includes(searchTerm.toLowerCase())),
+    )
+    .sort((a, b) => {
+      const catA = a.category || "";
+      const catB = b.category || "";
+      return catA.localeCompare(catB);
+    });
 
-  const totalPages = Math.ceil(filteredCriteria.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredAndSortedCriteria.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentItems = filteredCriteria.slice(
+  const currentItems = filteredAndSortedCriteria.slice(
     startIndex,
     startIndex + itemsPerPage,
   );
@@ -89,7 +102,9 @@ const Criteria = () => {
         name: item.name,
         type: item.type,
         point: item.point,
-        category: item.category || "Khác",
+        category:
+          item.category ||
+          (item.scope === "month" ? MONTH_CATEGORIES[0] : WEEK_CATEGORIES[0]),
         scope: item.scope || "week",
         isActive: item.isActive,
       });
@@ -99,7 +114,7 @@ const Criteria = () => {
         name: "",
         type: "penalty",
         point: "",
-        category: "1. XẾP HÀNG",
+        category: WEEK_CATEGORIES[0],
         scope: "week",
         isActive: true,
       });
@@ -146,6 +161,10 @@ const Criteria = () => {
       }
     }
   };
+
+  // BIẾN XÁC ĐỊNH DANH SÁCH DROPDOWN HIỆN TẠI
+  const currentCategoryList =
+    formData.scope === "month" ? MONTH_CATEGORIES : WEEK_CATEGORIES;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 font-sans">
@@ -215,12 +234,15 @@ const Criteria = () => {
                   <td className="px-6 py-4 text-gray-600">
                     {startIndex + index + 1}
                   </td>
-                  <td className="px-6 py-4 font-medium text-gray-800">
+                  <td
+                    className="px-6 py-4 font-medium text-gray-800 max-w-[200px] md:max-w-[300px] truncate"
+                    title={c.name}
+                  >
                     {c.name}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-md border border-purple-100 italic">
-                      <Tag size={12} /> {c.category}
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-md border border-purple-100 italic w-max">
+                      <Tag size={12} /> {c.category || "Khác"}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -260,7 +282,6 @@ const Criteria = () => {
         </table>
       </div>
 
-      {/* Phân trang (Giữ nguyên logic cũ) */}
       {totalPages > 1 && (
         <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-gray-200 gap-4">
           <span className="text-sm text-gray-500">
@@ -268,11 +289,14 @@ const Criteria = () => {
             <span className="font-medium text-gray-900">{startIndex + 1}</span>{" "}
             đến{" "}
             <span className="font-medium text-gray-900">
-              {Math.min(startIndex + itemsPerPage, filteredCriteria.length)}
+              {Math.min(
+                startIndex + itemsPerPage,
+                filteredAndSortedCriteria.length,
+              )}
             </span>{" "}
             /{" "}
             <span className="font-medium text-gray-900">
-              {filteredCriteria.length}
+              {filteredAndSortedCriteria.length}
             </span>
           </span>
           <div className="flex items-center gap-2">
@@ -296,7 +320,6 @@ const Criteria = () => {
         </div>
       )}
 
-      {/* Modal Thêm/Sửa */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-lg mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -313,7 +336,6 @@ const Criteria = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
-              {/* Scope & Type */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
@@ -321,9 +343,17 @@ const Criteria = () => {
                   </label>
                   <select
                     value={formData.scope}
-                    onChange={(e) =>
-                      setFormData({ ...formData, scope: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const newScope = e.target.value;
+                      setFormData({
+                        ...formData,
+                        scope: newScope,
+                        category:
+                          newScope === "month"
+                            ? MONTH_CATEGORIES[0]
+                            : WEEK_CATEGORIES[0],
+                      });
+                    }}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm"
                   >
                     <option value="week">Chấm hàng tuần</option>
@@ -347,7 +377,6 @@ const Criteria = () => {
                 </div>
               </div>
 
-              {/* Category */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                   Danh mục nhóm
@@ -359,7 +388,7 @@ const Criteria = () => {
                   }
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm"
                 >
-                  {CATEGORIES.map((cat) => (
+                  {currentCategoryList.map((cat) => (
                     <option key={cat} value={cat}>
                       {cat}
                     </option>
@@ -367,7 +396,6 @@ const Criteria = () => {
                 </select>
               </div>
 
-              {/* Name */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                   Tên tiêu chí
@@ -383,7 +411,6 @@ const Criteria = () => {
                 />
               </div>
 
-              {/* Point & Status */}
               <div className="grid grid-cols-2 gap-4 items-end">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">

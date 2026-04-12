@@ -1,34 +1,34 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom"; // Import useNavigate để chuyển trang
+import { useNavigate } from "react-router-dom";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import {
   CheckCircle2,
   Clock,
-  Trash2,
   Edit3,
   Trophy,
   Lock,
   AlertTriangle,
   Download,
+  Award,
 } from "lucide-react";
 import { toast } from "sonner";
 import { classApi } from "../api/classApi";
-import { weekApi } from "../api/weekApi";
-import { weeklyScoreApi } from "../api/weeklyScoreApi";
+import { monthApi } from "../api/monthApi";
+import { monthlyScoreApi } from "../api/monthlyScoreApi";
 import { schoolYearApi } from "../api/schoolYearApi";
 import { useAuth } from "../context/AuthContext";
 
-const Scoring = () => {
+const MonthlyScoring = () => {
   const { user } = useAuth();
-  const navigate = useNavigate(); // Khởi tạo hàm chuyển hướng
+  const navigate = useNavigate();
 
-  // --- STATES BỘ LỌC NĂM & TUẦN ---
+  // --- STATES BỘ LỌC NĂM & THÁNG ---
   const [schoolYears, setSchoolYears] = useState([]);
   const [selectedYearId, setSelectedYearId] = useState("");
 
-  const [weeksList, setWeeksList] = useState([]);
-  const [selectedWeekId, setSelectedWeekId] = useState("");
+  const [monthsList, setMonthsList] = useState([]);
+  const [selectedMonthId, setSelectedMonthId] = useState("");
 
   // --- STATES DỮ LIỆU ---
   const [baseClasses, setBaseClasses] = useState([]);
@@ -37,8 +37,10 @@ const Scoring = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("6-7");
 
-  const currentSelectedWeek = weeksList.find((w) => w._id === selectedWeekId);
-  const isReadOnly = currentSelectedWeek?.isLocked || false;
+  const currentSelectedMonth = monthsList.find(
+    (m) => m._id === selectedMonthId,
+  );
+  const isReadOnly = currentSelectedMonth?.isLocked || false;
 
   useEffect(() => {
     const fetchInitData = async () => {
@@ -63,27 +65,21 @@ const Scoring = () => {
       if (!selectedYearId) return;
       try {
         setLoading(true);
-        const [classesData, weeksData] = await Promise.all([
+        const [classesData, monthsData] = await Promise.all([
           classApi.getAll({ schoolYearId: selectedYearId }),
-          weekApi.getAll({ schoolYearId: selectedYearId }),
+          monthApi.getAll({ schoolYearId: selectedYearId }),
         ]);
 
-        const today = new Date();
-        today.setHours(23, 59, 59, 999);
-        const visibleWeeks = weeksData.filter(
-          (w) => new Date(w.startDate) <= today,
-        );
-
         setBaseClasses(classesData);
-        setWeeksList(visibleWeeks);
+        setMonthsList(monthsData);
 
-        if (visibleWeeks.length > 0) {
-          const openWeek = visibleWeeks.find((w) => !w.isLocked);
-          setSelectedWeekId(
-            openWeek ? openWeek._id : visibleWeeks[visibleWeeks.length - 1]._id,
+        if (monthsData.length > 0) {
+          const openMonth = monthsData.find((m) => !m.isLocked);
+          setSelectedMonthId(
+            openMonth ? openMonth._id : monthsData[monthsData.length - 1]._id,
           );
         } else {
-          setSelectedWeekId("");
+          setSelectedMonthId("");
           setAllScores([]);
         }
       } catch (error) {
@@ -95,22 +91,22 @@ const Scoring = () => {
     fetchYearData();
   }, [selectedYearId]);
 
-  const fetchScoresForWeek = async (weekId) => {
-    if (!weekId || baseClasses.length === 0) {
+  const fetchScoresForMonth = async (monthId) => {
+    if (!monthId || baseClasses.length === 0) {
       setAllScores([]);
       return;
     }
     try {
-      const rankingData = await weeklyScoreApi.getRankingByWeek(weekId);
+      const rankingData = await monthlyScoreApi.getRankingByMonth(monthId);
       setAllScores(rankingData);
     } catch (error) {
-      toast.error("Lỗi khi tải bảng điểm của tuần này");
+      toast.error("Lỗi khi tải bảng điểm của tháng này");
     }
   };
 
   useEffect(() => {
-    fetchScoresForWeek(selectedWeekId);
-  }, [selectedWeekId, baseClasses]);
+    fetchScoresForMonth(selectedMonthId);
+  }, [selectedMonthId, baseClasses]);
 
   const displayClasses = useMemo(() => {
     const targetGrades = activeTab === "6-7" ? [6, 7] : [8, 9];
@@ -126,35 +122,26 @@ const Scoring = () => {
     });
 
     return mergedClasses.sort((a, b) => {
-      if (a.scoreRecord && b.scoreRecord)
-        return b.scoreRecord.totalScore - a.scoreRecord.totalScore;
-      if (a.scoreRecord && !b.scoreRecord) return -1;
-      if (!a.scoreRecord && b.scoreRecord) return 1;
+      // Logic sắp xếp: Những lớp "Đã chấm" được ưu tiên xếp trước, theo điểm từ cao xuống thấp
+      const aScored =
+        a.scoreRecord && a.scoreRecord.monthlyDetails !== undefined;
+      const bScored =
+        b.scoreRecord && b.scoreRecord.monthlyDetails !== undefined;
+
+      if (aScored && bScored)
+        return b.scoreRecord.finalScore - a.scoreRecord.finalScore;
+      if (aScored && !bScored) return -1;
+      if (!aScored && bScored) return 1;
       return 0;
     });
   }, [activeTab, baseClasses, allScores]);
 
-  // HÀM MỚI: CHUYỂN HƯỚNG SANG TRANG NHẬP ĐIỂM
   const handleGoToScoreInput = (classId) => {
     if (isReadOnly) return;
-    // Dùng template literal để gắn ID thực tế vào URL
-    navigate(`/scoring/week/${selectedWeekId}/class/${classId}`);
+    navigate(`/scoring/month/${selectedMonthId}/class/${classId}`);
   };
 
-  const handleDeleteScore = async (e, scoreId) => {
-    e.stopPropagation();
-    if (isReadOnly) return toast.error("Tuần này đã khóa, không thể xóa điểm!");
-    if (window.confirm("Bạn có chắc muốn xóa điểm của lớp này?")) {
-      try {
-        await weeklyScoreApi.deleteScore(scoreId);
-        toast.success("Đã reset điểm lớp về trạng thái Chưa chấm");
-        fetchScoresForWeek(selectedWeekId);
-      } catch (error) {
-        toast.error("Lỗi khi xóa điểm");
-      }
-    }
-  };
-
+  // Tính năng xuất Excel báo cáo tháng
   const handleExportExcel = async () => {
     if (allScores.length === 0)
       return toast.warning("Không có dữ liệu để xuất!");
@@ -169,7 +156,9 @@ const Scoring = () => {
           { header: "Hạng", key: "rank", width: 10 },
           { header: "Tên Lớp", key: "className", width: 20 },
           { header: "Khối", key: "grade", width: 15 },
-          { header: "Tổng Điểm", key: "totalScore", width: 15 },
+          { header: "Điểm Tuần", key: "weekScore", width: 15 },
+          { header: "Điểm Phong Trào", key: "monthScore", width: 20 },
+          { header: "Tổng Kết Tháng", key: "finalScore", width: 20 },
           { header: "Trạng Thái", key: "status", width: 15 },
         ];
 
@@ -180,22 +169,32 @@ const Scoring = () => {
             return { ...cls, scoreRecord: score || null };
           })
           .sort((a, b) => {
-            if (a.scoreRecord && b.scoreRecord)
-              return b.scoreRecord.totalScore - a.scoreRecord.totalScore;
-            if (a.scoreRecord && !b.scoreRecord) return -1;
-            if (!a.scoreRecord && b.scoreRecord) return 1;
+            const aScored =
+              a.scoreRecord && a.scoreRecord.monthlyDetails !== undefined;
+            const bScored =
+              b.scoreRecord && b.scoreRecord.monthlyDetails !== undefined;
+            if (aScored && bScored)
+              return b.scoreRecord.finalScore - a.scoreRecord.finalScore;
+            if (aScored && !bScored) return -1;
+            if (!aScored && bScored) return 1;
             return 0;
           });
 
         sheetClasses.forEach((cls, index) => {
+          const isMonthScored =
+            cls.scoreRecord && cls.scoreRecord.monthlyDetails !== undefined;
           worksheet.addRow({
-            rank: cls.scoreRecord ? index + 1 : "Chưa xếp",
+            rank: isMonthScored ? index + 1 : "Chưa xếp",
             className: cls.name,
             grade: `Khối ${cls.grade}`,
-            totalScore: cls.scoreRecord
-              ? cls.scoreRecord.totalScore
+            weekScore: cls.scoreRecord
+              ? cls.scoreRecord.totalWeekPoint
+              : "Chưa có",
+            monthScore: isMonthScored
+              ? cls.scoreRecord.totalMonthPoint
               : "Chưa chấm",
-            status: cls.scoreRecord ? "Đã chấm" : "Chờ chấm",
+            finalScore: isMonthScored ? cls.scoreRecord.finalScore : "Chưa có",
+            status: isMonthScored ? "Đã chấm" : "Chờ chấm",
           });
         });
 
@@ -211,7 +210,7 @@ const Scoring = () => {
             type: "pattern",
             pattern: "solid",
             fgColor: { argb: "FF2563EB" },
-          };
+          }; // Màu Xanh đồng bộ
           cell.border = {
             top: { style: "thin" },
             left: { style: "thin" },
@@ -240,8 +239,8 @@ const Scoring = () => {
 
       const yearName =
         schoolYears.find((y) => y._id === selectedYearId)?.name || "NamHoc";
-      const weekName = currentSelectedWeek?.name || "Tuan";
-      const fileName = `BaoCao_${yearName}_${weekName}.xlsx`.replace(
+      const monthName = currentSelectedMonth?.name || "Thang";
+      const fileName = `BaoCao_${yearName}_${monthName}.xlsx`.replace(
         /\s+/g,
         "_",
       );
@@ -252,9 +251,8 @@ const Scoring = () => {
       });
       saveAs(blob, fileName);
 
-      toast.success("Đã xuất file báo cáo 2 Khối thành công!");
+      toast.success("Đã xuất file báo cáo Tháng thành công!");
     } catch (error) {
-      console.error("Lỗi xuất Excel:", error);
       toast.error("Có lỗi xảy ra khi xuất file Excel.");
     }
   };
@@ -269,15 +267,15 @@ const Scoring = () => {
 
   return (
     <div className="font-sans space-y-6">
-      {/* HEADER & BỘ LỌC ĐA CẤP */}
+      {/* HEADER & BỘ LỌC ĐA CẤP (Giao diện Đồng bộ màu Xanh) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
           <div>
-            <h2 className="text-xl font-bold text-gray-800">
-              Chấm điểm thi đua
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <Award className="text-blue-600" /> Thi đua cấp Tháng
             </h2>
             <p className="text-sm text-gray-500 mt-1">
-              Chọn năm học và tuần để xem hoặc chấm điểm.
+              Chọn năm học và tháng để xem hoặc nhập điểm phong trào.
             </p>
           </div>
 
@@ -301,20 +299,20 @@ const Scoring = () => {
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
-                Tuần:
+                Tháng:
               </span>
               <select
-                value={selectedWeekId}
-                onChange={(e) => setSelectedWeekId(e.target.value)}
-                disabled={weeksList.length === 0}
+                value={selectedMonthId}
+                onChange={(e) => setSelectedMonthId(e.target.value)}
+                disabled={monthsList.length === 0}
                 className="w-full sm:w-auto px-4 py-2.5 bg-blue-50/50 border border-blue-200 rounded-lg text-blue-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
               >
-                {weeksList.length === 0 ? (
-                  <option value="">Không có Tuần khả dụng</option>
+                {monthsList.length === 0 ? (
+                  <option value="">Không có Tháng khả dụng</option>
                 ) : (
-                  weeksList.map((w) => (
-                    <option key={w._id} value={w._id}>
-                      {w.name} {w.isLocked ? "(Đã khóa)" : "(Đang mở)"}
+                  monthsList.map((m) => (
+                    <option key={m._id} value={m._id}>
+                      {m.name} {m.isLocked ? "(Đã khóa)" : "(Đang mở)"}
                     </option>
                   ))
                 )}
@@ -324,7 +322,7 @@ const Scoring = () => {
             {user?.role === "admin" && (
               <button
                 onClick={handleExportExcel}
-                disabled={weeksList.length === 0 || allScores.length === 0}
+                disabled={monthsList.length === 0 || allScores.length === 0}
                 className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors font-bold shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Download size={18} /> Xuất Báo Cáo
@@ -334,14 +332,16 @@ const Scoring = () => {
         </div>
       </div>
 
-      {weeksList.length === 0 ? (
+      {/* THÔNG BÁO TRẠNG THÁI (TRỐNG / KHÓA SỔ) */}
+      {monthsList.length === 0 ? (
         <div className="bg-white p-8 rounded-xl border border-gray-200 text-center shadow-sm">
           <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
           <h2 className="text-xl font-bold text-gray-800 mb-2">
-            Chưa có Tuần thi đua nào diễn ra!
+            Chưa có Tháng thi đua nào được tạo!
           </h2>
           <p className="text-gray-500">
-            Hiện tại năm học này chưa có Tuần nào bắt đầu.
+            Hiện tại năm học này chưa có Tháng nào. Vui lòng thiết lập ở Quản lý
+            Tháng.
           </p>
         </div>
       ) : isReadOnly ? (
@@ -349,18 +349,18 @@ const Scoring = () => {
           <Lock className="text-orange-500 shrink-0 mt-0.5" size={20} />
           <div>
             <h4 className="font-bold text-orange-800">
-              Chế độ Chỉ xem (Tuần đã khóa sổ)
+              Chế độ Chỉ xem (Tháng đã chốt sổ)
             </h4>
             <p className="text-sm text-orange-700 mt-1">
-              Bạn đang xem kết quả của một tuần đã chốt sổ. Không thể sửa hay
-              xóa điểm.
+              Bạn đang xem kết quả của một tháng đã chốt sổ. Không thể sửa hay
+              xóa điểm phong trào.
             </p>
           </div>
         </div>
       ) : null}
 
       {/* TABS CHUYỂN ĐỔI KHỐI THI ĐUA */}
-      {weeksList.length > 0 && (
+      {monthsList.length > 0 && (
         <div className="flex bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm w-fit mb-2">
           <button
             onClick={() => setActiveTab("6-7")}
@@ -385,11 +385,13 @@ const Scoring = () => {
         </div>
       )}
 
-      {/* DANH SÁCH LỚP */}
-      {weeksList.length > 0 && (
+      {/* DANH SÁCH LỚP (GIAO DIỆN SAO Y BẢN CHÍNH TỪ SCORING.JSX) */}
+      {monthsList.length > 0 && (
         <div className="flex flex-col gap-4">
           {displayClasses.map((cls, index) => {
-            const isScored = !!cls.scoreRecord;
+            // ĐÂY LÀ ĐOẠN FIX LỖI: Chỉ coi là "Đã chấm" nếu có mảng monthlyDetails
+            const isMonthScored =
+              cls.scoreRecord && cls.scoreRecord.monthlyDetails !== undefined;
             const rank = index + 1;
 
             return (
@@ -397,7 +399,7 @@ const Scoring = () => {
                 key={cls._id}
                 onClick={() => handleGoToScoreInput(cls._id)}
                 className={`relative flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border-2 transition-all 
-                  ${isScored ? "bg-white border-green-200" : "bg-gray-50 border-gray-200 opacity-80"}
+                  ${isMonthScored ? "bg-white border-green-200" : "bg-gray-50 border-gray-200 opacity-80"}
                   ${isReadOnly ? "cursor-default" : "cursor-pointer hover:shadow-md hover:border-blue-400"}
                 `}
               >
@@ -405,7 +407,7 @@ const Scoring = () => {
                   <div
                     className={`w-14 h-14 shrink-0 flex flex-col items-center justify-center rounded-xl font-black text-lg
                     ${
-                      !isScored
+                      !isMonthScored
                         ? "bg-gray-200 text-gray-400"
                         : rank === 1
                           ? "bg-yellow-100 text-yellow-600 border-yellow-300"
@@ -416,7 +418,7 @@ const Scoring = () => {
                               : "bg-blue-50 text-blue-600 border-blue-200"
                     }`}
                   >
-                    {isScored ? (
+                    {isMonthScored ? (
                       <>
                         {rank <= 3 && <Trophy size={14} className="mb-0.5" />}
                         <span>#{rank}</span>
@@ -430,7 +432,7 @@ const Scoring = () => {
                       <h3 className="text-xl font-bold text-gray-800">
                         {cls.name}
                       </h3>
-                      {isScored ? (
+                      {isMonthScored ? (
                         <span className="flex items-center gap-1 bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold">
                           <CheckCircle2 size={12} /> Đã chấm
                         </span>
@@ -446,38 +448,57 @@ const Scoring = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between w-full sm:w-auto mt-4 sm:mt-0 sm:pl-6 sm:border-l border-gray-100 min-w-[200px]">
-                  <div className="text-left sm:text-right">
-                    <span className="text-xs text-gray-500 block mb-0.5">
-                      Tổng điểm
-                    </span>
-                    <span
-                      className={`text-2xl font-black ${isScored ? (cls.scoreRecord.totalScore >= 0 ? "text-green-600" : "text-red-600") : "text-gray-300"}`}
-                    >
-                      {isScored ? cls.scoreRecord.totalScore : "Chưa có"}
-                    </span>
+                <div className="flex items-center justify-between w-full sm:w-auto mt-4 sm:mt-0 sm:pl-6 sm:border-l border-gray-100">
+                  {/* Khu vực chứa 3 loại điểm */}
+                  <div className="flex items-center gap-4 sm:gap-6">
+                    <div className="text-center hidden md:block">
+                      <span className="text-[10px] text-gray-500 font-bold uppercase block mb-0.5">
+                        Điểm Tuần
+                      </span>
+                      <span className="text-lg font-bold text-gray-600">
+                        {cls.scoreRecord
+                          ? cls.scoreRecord.totalWeekPoint
+                          : "--"}
+                      </span>
+                    </div>
+                    <div className="text-center hidden md:block">
+                      <span className="text-[10px] text-gray-500 font-bold uppercase block mb-0.5">
+                        Phong Trào
+                      </span>
+                      <span
+                        className={`text-lg font-bold ${isMonthScored && cls.scoreRecord.totalMonthPoint >= 0 ? "text-green-600" : "text-red-600"}`}
+                      >
+                        {isMonthScored
+                          ? cls.scoreRecord.totalMonthPoint > 0
+                            ? `+${cls.scoreRecord.totalMonthPoint}`
+                            : cls.scoreRecord.totalMonthPoint
+                          : "--"}
+                      </span>
+                    </div>
+                    <div className="text-right sm:text-center min-w-[100px]">
+                      <span className="text-[10px] text-blue-500 font-bold uppercase block mb-0.5">
+                        Tổng Kết Tháng
+                      </span>
+                      <span
+                        className={`text-2xl font-black ${isMonthScored ? (cls.scoreRecord.finalScore >= 0 ? "text-blue-700" : "text-red-600") : "text-gray-300"}`}
+                      >
+                        {isMonthScored ? cls.scoreRecord.finalScore : "Chưa có"}
+                      </span>
+                    </div>
                   </div>
+
+                  {/* Nút hành động */}
                   <div className="ml-6 flex gap-2">
                     {isReadOnly ? (
                       <span className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-sm font-medium border border-gray-200">
                         <Lock size={14} /> Chốt sổ
                       </span>
-                    ) : isScored ? (
-                      <>
-                        <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg">
-                          <Edit3 size={18} />
-                        </button>
-                        <button
-                          onClick={(e) =>
-                            handleDeleteScore(e, cls.scoreRecord._id)
-                          }
-                          className="p-2 text-red-500 hover:bg-red-100 rounded-lg z-10 relative"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </>
+                    ) : isMonthScored ? (
+                      <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg">
+                        <Edit3 size={18} />
+                      </button>
                     ) : (
-                      <button className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm">
+                      <button className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm whitespace-nowrap">
                         Bấm để chấm
                       </button>
                     )}
@@ -492,4 +513,4 @@ const Scoring = () => {
   );
 };
 
-export default Scoring;
+export default MonthlyScoring;

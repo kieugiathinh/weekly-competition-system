@@ -8,6 +8,8 @@ import {
   AlertCircle,
   Clock,
   CheckCircle2,
+  CalendarDays,
+  CalendarRange,
 } from "lucide-react";
 import {
   BarChart,
@@ -22,8 +24,10 @@ import {
 } from "recharts";
 import { classApi } from "../api/classApi";
 import { weekApi } from "../api/weekApi";
+import { monthApi } from "../api/monthApi";
 import { criterionApi } from "../api/criterionApi";
 import { weeklyScoreApi } from "../api/weeklyScoreApi";
+import { monthlyScoreApi } from "../api/monthlyScoreApi";
 import { schoolYearApi } from "../api/schoolYearApi";
 
 const COLORS = [
@@ -38,14 +42,20 @@ const COLORS = [
 const Dashboard = () => {
   const [schoolYears, setSchoolYears] = useState([]);
   const [selectedYearId, setSelectedYearId] = useState("");
+
   const [weeksList, setWeeksList] = useState([]);
   const [selectedWeekId, setSelectedWeekId] = useState("");
-  const [gradeFilter, setGradeFilter] = useState("all"); // Lọc khối
+
+  const [monthsList, setMonthsList] = useState([]);
+  const [selectedMonthId, setSelectedMonthId] = useState("");
+
+  const [gradeFilter, setGradeFilter] = useState("all");
+  const [viewMode, setViewMode] = useState("week"); // 'week' hoặc 'month'
 
   const [loading, setLoading] = useState(true);
   const [baseClasses, setBaseClasses] = useState([]);
   const [baseCriteria, setBaseCriteria] = useState([]);
-  const [rankingData, setRankingData] = useState([]); // Lưu toàn bộ điểm thay vì chia state nhỏ
+  const [rankingData, setRankingData] = useState([]);
 
   // 1. FETCH NĂM HỌC VÀ TIÊU CHÍ
   useEffect(() => {
@@ -72,28 +82,30 @@ const Dashboard = () => {
     fetchInitData();
   }, []);
 
-  // 2. FETCH LỚP VÀ TUẦN (Có lọc Tuần Tương lai)
+  // 2. FETCH LỚP, TUẦN VÀ THÁNG THEO NĂM HỌC
   useEffect(() => {
     const fetchYearData = async () => {
       if (!selectedYearId) return;
 
       try {
         setLoading(true);
-        const [classesData, weeksData] = await Promise.all([
+        const [classesData, weeksData, monthsData] = await Promise.all([
           classApi.getAll({ schoolYearId: selectedYearId }),
           weekApi.getAll({ schoolYearId: selectedYearId }),
+          monthApi.getAll({ schoolYearId: selectedYearId }),
         ]);
 
-        // LOGIC LỌC TUẦN: Chỉ lấy những tuần đã/đang diễn ra (startDate <= hôm nay)
         const today = new Date();
         today.setHours(23, 59, 59, 999);
 
+        // Lọc tuần đã/đang diễn ra
         const visibleWeeks = weeksData.filter(
           (w) => new Date(w.startDate) <= today,
         );
 
         setBaseClasses(classesData);
         setWeeksList(visibleWeeks);
+        setMonthsList(monthsData);
 
         if (visibleWeeks.length > 0) {
           const openWeek = visibleWeeks.find((w) => !w.isLocked);
@@ -102,7 +114,15 @@ const Dashboard = () => {
           );
         } else {
           setSelectedWeekId("");
-          setRankingData([]);
+        }
+
+        if (monthsData.length > 0) {
+          const openMonth = monthsData.find((m) => !m.isLocked);
+          setSelectedMonthId(
+            openMonth ? openMonth._id : monthsData[monthsData.length - 1]._id,
+          );
+        } else {
+          setSelectedMonthId("");
         }
       } catch (error) {
         console.error("Lỗi khi tải dữ liệu năm học:", error);
@@ -114,31 +134,42 @@ const Dashboard = () => {
     fetchYearData();
   }, [selectedYearId]);
 
-  // 3. FETCH BẢNG ĐIỂM THEO TUẦN ĐƯỢC CHỌN
+  // 3. FETCH BẢNG ĐIỂM (PHỤ THUỘC VÀO VIEW MODE LÀ TUẦN HAY THÁNG)
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!selectedWeekId || baseClasses.length === 0) {
-        setRankingData([]);
-        return;
-      }
+      if (baseClasses.length === 0) return;
 
       try {
-        const ranking = await weeklyScoreApi.getRankingByWeek(selectedWeekId);
-        setRankingData(ranking);
+        if (viewMode === "week") {
+          if (!selectedWeekId) {
+            setRankingData([]);
+            return;
+          }
+          const ranking = await weeklyScoreApi.getRankingByWeek(selectedWeekId);
+          setRankingData(ranking);
+        } else {
+          if (!selectedMonthId) {
+            setRankingData([]);
+            return;
+          }
+          const ranking =
+            await monthlyScoreApi.getRankingByMonth(selectedMonthId);
+          setRankingData(ranking);
+        }
       } catch (error) {
         console.error("Lỗi khi tải bảng điểm cho Dashboard:", error);
       }
     };
 
     fetchDashboardData();
-  }, [selectedWeekId, baseClasses]);
+  }, [viewMode, selectedWeekId, selectedMonthId, baseClasses]);
 
-  // --- TỰ ĐỘNG TÍNH TOÁN DỮ LIỆU KHI CHUYỂN KHỐI (useMemo) ---
+  // --- TỰ ĐỘNG TÍNH TOÁN DỮ LIỆU ---
   const filteredStats = useMemo(() => {
     let classes = [...baseClasses];
     let ranking = [...rankingData];
 
-    // Lọc theo Dropdown Khối
+    // Lọc theo Khối
     if (gradeFilter === "6-7") {
       classes = classes.filter((c) => [6, 7].includes(c.grade));
       ranking = ranking.filter((r) => [6, 7].includes(r.classId.grade));
@@ -147,24 +178,43 @@ const Dashboard = () => {
       ranking = ranking.filter((r) => [8, 9].includes(r.classId.grade));
     }
 
-    // Phân loại Lớp Chưa Chấm
-    const scoredClassIds = ranking.map((r) => r.classId._id);
-    const unscored = classes.filter((c) => !scoredClassIds.includes(c._id));
+    let validRanking = [];
+    let unscored = [];
 
-    // Đếm lỗi vi phạm
+    if (viewMode === "week") {
+      validRanking = ranking.sort((a, b) => b.totalScore - a.totalScore);
+      const scoredClassIds = validRanking.map((r) => r.classId._id);
+      unscored = classes.filter((c) => !scoredClassIds.includes(c._id));
+    } else {
+      // Chấm tháng: Chỉ lấy những lớp có mảng monthlyDetails (tức là đã thao tác lưu điểm phong trào)
+      validRanking = ranking
+        .filter((r) => r.monthlyDetails !== undefined)
+        .sort((a, b) => b.finalScore - a.finalScore);
+      const scoredClassIds = validRanking.map((r) => r.classId._id);
+      unscored = classes.filter((c) => !scoredClassIds.includes(c._id));
+    }
+
+    // Đếm lỗi vi phạm (chỉ lấy loại penalty)
     const violationCount = {};
-    ranking.forEach((scoreRecord) => {
-      scoreRecord.details.forEach((detail) => {
-        const crit = baseCriteria.find(
-          (c) => c._id === (detail.criterionId._id || detail.criterionId),
-        );
-        if (crit && crit.type === "penalty") {
-          if (!violationCount[crit.name]) {
-            violationCount[crit.name] = 0;
+    validRanking.forEach((scoreRecord) => {
+      const details =
+        viewMode === "week" ? scoreRecord.details : scoreRecord.monthlyDetails;
+      if (details) {
+        details.forEach((detail) => {
+          // FIX LỖI: Kiểm tra xem tiêu chí có tồn tại (chưa bị xóa) không
+          if (detail.criterionId) {
+            const critId = detail.criterionId._id || detail.criterionId;
+            const crit = baseCriteria.find((c) => c._id === critId);
+
+            if (crit && crit.type === "penalty") {
+              if (!violationCount[crit.name]) {
+                violationCount[crit.name] = 0;
+              }
+              violationCount[crit.name] += detail.quantity;
+            }
           }
-          violationCount[crit.name] += detail.quantity;
-        }
-      });
+        });
+      }
     });
 
     const pieData = Object.keys(violationCount)
@@ -174,13 +224,13 @@ const Dashboard = () => {
 
     return {
       totalClasses: classes.length,
-      scoredClasses: ranking.length,
+      scoredClasses: validRanking.length,
       unscoredClasses: unscored,
-      top5: ranking.slice(0, 5),
-      bottom5: [...ranking].reverse().slice(0, 5),
+      top5: validRanking.slice(0, 5),
+      bottom5: [...validRanking].reverse().slice(0, 5),
       violations: pieData,
     };
-  }, [gradeFilter, baseClasses, rankingData, baseCriteria]);
+  }, [gradeFilter, viewMode, baseClasses, rankingData, baseCriteria]);
 
   if (loading && schoolYears.length === 0) {
     return (
@@ -190,91 +240,140 @@ const Dashboard = () => {
     );
   }
 
+  // Khai báo biến kiểm tra để hiện cảnh báo trống
+  const isListEmpty =
+    viewMode === "week" ? weeksList.length === 0 : monthsList.length === 0;
+  const activeCriteriaCount = baseCriteria.filter(
+    (c) => c.isActive && c.scope === viewMode,
+  ).length;
+
   return (
     <div className="font-sans space-y-6">
       {/* 1. HEADER & BỘ LỌC ĐA CẤP */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
               Bảng điều khiển
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Tổng quan tình hình thi đua nề nếp.
+              Tổng quan tình hình thi đua nề nếp toàn trường.
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
-            {/* Lọc Khối Thi Đua */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
-                Thống kê:
-              </span>
-              <select
-                value={gradeFilter}
-                onChange={(e) => setGradeFilter(e.target.value)}
-                className="w-full sm:w-auto px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                <option value="all">Toàn trường</option>
-                <option value="6-7">Khối 6 - 7</option>
-                <option value="8-9">Khối 8 - 9</option>
-              </select>
-            </div>
+          {/* CÔNG TẮC CHUYỂN ĐỔI TUẦN/THÁNG */}
+          <div className="flex bg-gray-100 p-1 rounded-xl shadow-inner w-full sm:w-auto">
+            <button
+              onClick={() => setViewMode("week")}
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all w-1/2 sm:w-auto justify-center ${
+                viewMode === "week"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <CalendarRange size={16} /> Theo Tuần
+            </button>
+            <button
+              onClick={() => setViewMode("month")}
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all w-1/2 sm:w-auto justify-center ${
+                viewMode === "month"
+                  ? "bg-white text-purple-600 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <CalendarDays size={16} /> Theo Tháng
+            </button>
+          </div>
+        </div>
 
-            {/* Lọc Năm Học */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
-                Năm học:
-              </span>
-              <select
-                value={selectedYearId}
-                onChange={(e) => setSelectedYearId(e.target.value)}
-                className="w-full sm:w-auto px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                {schoolYears.map((y) => (
-                  <option key={y._id} value={y._id}>
-                    {y.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full pt-4 border-t border-gray-100">
+          {/* Lọc Khối */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
+              Khối:
+            </span>
+            <select
+              value={gradeFilter}
+              onChange={(e) => setGradeFilter(e.target.value)}
+              className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="all">Toàn trường</option>
+              <option value="6-7">Khối 6 - 7</option>
+              <option value="8-9">Khối 8 - 9</option>
+            </select>
+          </div>
 
-            {/* Lọc Tuần */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
-                Tuần:
-              </span>
+          {/* Lọc Năm Học */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
+              Năm học:
+            </span>
+            <select
+              value={selectedYearId}
+              onChange={(e) => setSelectedYearId(e.target.value)}
+              className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              {schoolYears.map((y) => (
+                <option key={y._id} value={y._id}>
+                  {y.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Lọc Tuần / Tháng */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
+              {viewMode === "week" ? "Tuần:" : "Tháng:"}
+            </span>
+            {viewMode === "week" ? (
               <select
                 value={selectedWeekId}
                 onChange={(e) => setSelectedWeekId(e.target.value)}
                 disabled={weeksList.length === 0}
-                className="w-full sm:w-auto px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
+                className="w-full sm:w-auto px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400"
               >
                 {weeksList.length === 0 ? (
-                  <option value="">Không có Tuần khả dụng</option>
+                  <option value="">Không có dữ liệu</option>
                 ) : (
                   weeksList.map((w) => (
                     <option key={w._id} value={w._id}>
-                      {w.name} {w.isLocked ? "(Đã khóa)" : "(Đang mở)"}
+                      {w.name} {w.isLocked ? "(Đã khóa)" : ""}
                     </option>
                   ))
                 )}
               </select>
-            </div>
+            ) : (
+              <select
+                value={selectedMonthId}
+                onChange={(e) => setSelectedMonthId(e.target.value)}
+                disabled={monthsList.length === 0}
+                className="w-full sm:w-auto px-4 py-2 bg-purple-50 border border-purple-200 rounded-lg text-purple-800 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                {monthsList.length === 0 ? (
+                  <option value="">Không có dữ liệu</option>
+                ) : (
+                  monthsList.map((m) => (
+                    <option key={m._id} value={m._id}>
+                      {m.name} {m.isLocked ? "(Đã khóa)" : ""}
+                    </option>
+                  ))
+                )}
+              </select>
+            )}
           </div>
         </div>
       </div>
 
-      {/* HIỂN THỊ NẾU NĂM HỌC CHƯA CÓ TUẦN NÀO */}
-      {weeksList.length === 0 ? (
+      {/* HIỂN THỊ NẾU DANH SÁCH TRỐNG */}
+      {isListEmpty ? (
         <div className="bg-white p-12 rounded-xl border border-gray-200 text-center shadow-sm">
           <AlertTriangle className="mx-auto h-16 w-16 text-yellow-500 mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            Chưa có Tuần thi đua nào diễn ra!
+            Chưa có {viewMode === "week" ? "Tuần" : "Tháng"} thi đua nào!
           </h2>
           <p className="text-gray-500">
-            Hiện tại năm học này chưa có Tuần nào bắt đầu. Hãy quay lại sau hoặc
-            kiểm tra lịch bên mục Quản lý Tuần.
+            Hãy quay lại sau hoặc kiểm tra lịch bên mục Quản lý hệ thống.
           </p>
         </div>
       ) : (
@@ -294,7 +393,9 @@ const Dashboard = () => {
             </div>
 
             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+              <div
+                className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${viewMode === "week" ? "bg-cyan-100 text-cyan-600" : "bg-purple-100 text-purple-600"}`}
+              >
                 <ListChecks size={24} />
               </div>
               <div>
@@ -302,7 +403,7 @@ const Dashboard = () => {
                   Tiêu chí áp dụng
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900">
-                  {baseCriteria.filter((c) => c.isActive).length}
+                  {activeCriteriaCount}
                 </h3>
               </div>
             </div>
@@ -313,7 +414,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-500 font-medium">
-                  Đã chấm điểm
+                  Đã tổng hợp điểm
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900">
                   {filteredStats.scoredClasses}{" "}
@@ -330,7 +431,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-500 font-medium">
-                  Lớp chưa chấm
+                  Lớp chờ cập nhật
                 </p>
                 <h3 className="text-2xl font-bold text-gray-900">
                   {filteredStats.unscoredClasses.length}
@@ -344,8 +445,8 @@ const Dashboard = () => {
             {/* Biểu đồ Cột */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm lg:col-span-2">
               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-6">
-                <Trophy className="text-yellow-500" size={20} /> Vinh danh Top 5
-                Lớp Xuất Sắc{" "}
+                <Trophy className="text-yellow-500" size={20} />
+                Top 5 Lớp Xuất Sắc Nhất{" "}
                 {gradeFilter === "all"
                   ? "(Toàn trường)"
                   : `(Khối ${gradeFilter})`}
@@ -378,14 +479,26 @@ const Dashboard = () => {
                         }}
                       />
                       <Bar
-                        dataKey="totalScore"
-                        name="Tổng điểm"
+                        dataKey={
+                          viewMode === "week" ? "totalScore" : "finalScore"
+                        }
+                        name={
+                          viewMode === "week" ? "Điểm Tuần" : "Tổng Kết Tháng"
+                        }
                         radius={[4, 4, 0, 0]}
                       >
                         {filteredStats.top5.map((entry, index) => (
                           <Cell
                             key={`cell-${index}`}
-                            fill={index === 0 ? "#3b82f6" : "#93c5fd"}
+                            fill={
+                              index === 0
+                                ? viewMode === "week"
+                                  ? "#3b82f6"
+                                  : "#9333ea"
+                                : viewMode === "week"
+                                  ? "#93c5fd"
+                                  : "#d8b4fe"
+                            }
                           />
                         ))}
                       </Bar>
@@ -393,7 +506,7 @@ const Dashboard = () => {
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-full flex items-center justify-center text-gray-400">
-                    Chưa có dữ liệu xếp hạng của tuần này
+                    Chưa có dữ liệu xếp hạng
                   </div>
                 )}
               </div>
@@ -402,8 +515,8 @@ const Dashboard = () => {
             {/* Biểu đồ Tròn */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-2">
-                <AlertCircle className="text-red-500" size={20} /> Lỗi vi phạm
-                phổ biến
+                <AlertCircle className="text-red-500" size={20} /> Các lỗi vi
+                phạm phổ biến
               </h3>
               <div className="h-64">
                 {filteredStats.violations.length > 0 ? (
@@ -436,7 +549,7 @@ const Dashboard = () => {
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-full flex items-center justify-center text-gray-400">
-                    Chưa có ghi nhận vi phạm
+                    Không có ghi nhận vi phạm
                   </div>
                 )}
               </div>
@@ -474,7 +587,7 @@ const Dashboard = () => {
             {/* Lớp cần nhắc nhở */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <h3 className="text-lg font-bold text-gray-800 mb-4 border-b border-gray-100 pb-3">
-                Top 5 Lớp Điểm Thấp Nhất (Cần đôn đốc)
+                Top 5 Lớp Điểm Thấp Nhất (Cần chú ý)
               </h3>
               <div className="flex flex-col gap-3">
                 {filteredStats.bottom5.length > 0 ? (
@@ -492,7 +605,10 @@ const Dashboard = () => {
                         </span>
                       </div>
                       <span className="font-bold text-red-600">
-                        {score.totalScore} điểm
+                        {viewMode === "week"
+                          ? score.totalScore
+                          : score.finalScore}{" "}
+                        điểm
                       </span>
                     </div>
                   ))
@@ -505,7 +621,7 @@ const Dashboard = () => {
             {/* Lớp chưa chấm điểm */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <h3 className="text-lg font-bold text-gray-800 mb-4 border-b border-gray-100 pb-3">
-                Danh sách Lớp chưa chấm điểm
+                Danh sách Lớp chưa cập nhật điểm
               </h3>
               <div className="flex flex-col gap-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
                 {filteredStats.unscoredClasses.length > 0 ? (
@@ -518,14 +634,14 @@ const Dashboard = () => {
                         {cls.name}
                       </span>
                       <span className="flex items-center gap-1.5 text-xs font-medium text-orange-600 bg-orange-100 px-2.5 py-1 rounded-full">
-                        <Clock size={14} /> Chờ chấm
+                        <Clock size={14} /> Chờ cập nhật
                       </span>
                     </div>
                   ))
                 ) : (
                   <div className="p-4 bg-green-50 text-green-700 rounded-lg text-sm font-medium flex items-center justify-center gap-2 border border-green-200">
-                    <CheckCircle2 size={18} /> Tuyệt vời! Tất cả các lớp đã được
-                    chấm điểm.
+                    <CheckCircle2 size={18} /> Tuyệt vời! Tất cả các lớp đã hoàn
+                    thành.
                   </div>
                 )}
               </div>
