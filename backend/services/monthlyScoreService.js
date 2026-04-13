@@ -3,6 +3,8 @@ import { WeeklyScore } from "../models/weeklyScoreModel.js";
 import { Month } from "../models/monthModel.js";
 import { Class } from "../models/classModel.js";
 import { Criterion } from "../models/criterionModel.js";
+import { Notification } from "../models/notificationModel.js"; // Bổ sung
+import { getIO } from "../socket.js"; // Bổ sung
 
 // 1. Lưu điểm phong trào Tháng
 const saveMonthlyScoreService = async (data) => {
@@ -32,6 +34,26 @@ const saveMonthlyScoreService = async (data) => {
     });
   }
 
+  // --- BẮT ĐẦU LOGIC PHÁT THÔNG BÁO REALTIME ---
+  try {
+    const cls = await Class.findById(classId);
+    const month = await Month.findById(monthId);
+
+    if (cls && month) {
+      const newNotif = await Notification.create({
+        title: "Cập nhật điểm Tháng",
+        message: `Điểm phong trào của lớp ${cls.name} (${month.name}) vừa được lưu lại. Điểm cộng thêm: ${totalMonthlyPoint}`,
+        type: "SCORE",
+        targetRole: "admin",
+      });
+
+      getIO().to("admins").emit("new_notification", newNotif);
+    }
+  } catch (err) {
+    console.error("Lỗi khi tạo thông báo điểm tháng:", err);
+  }
+  // --- KẾT THÚC LOGIC THÔNG BÁO ---
+
   return scoreRecord;
 };
 
@@ -41,19 +63,17 @@ const getMonthlyRankingService = async (monthId) => {
   if (!month) throw new Error("Không tìm thấy Tháng");
 
   const classes = await Class.find({ schoolYearId: month.schoolYearId });
-  const weekIds = month.weekIds; // Các tuần thuộc tháng này
+  const weekIds = month.weekIds;
 
-  // Lấy toàn bộ điểm Tuần thuộc các Tuần trong Tháng
   const weeklyScores = await WeeklyScore.find({
     weekId: { $in: weekIds },
   }).populate("classId");
-  // Lấy điểm Phong trào Tháng
+
   const monthlyScores = await MonthlyScore.find({ monthId }).populate(
     "details.criterionId",
   );
 
   const ranking = classes.map((cls) => {
-    // 1. Tính tổng các Tuần
     const clsWeeklyScores = weeklyScores.filter(
       (ws) => ws.classId._id.toString() === cls._id.toString(),
     );
@@ -62,7 +82,6 @@ const getMonthlyRankingService = async (monthId) => {
       0,
     );
 
-    // 2. Tính tổng Tháng
     const clsMonthlyScore = monthlyScores.find(
       (ms) => ms.classId.toString() === cls._id.toString(),
     );
@@ -70,7 +89,6 @@ const getMonthlyRankingService = async (monthId) => {
       ? clsMonthlyScore.totalMonthlyPoint
       : 0;
 
-    // 3. Tính điểm chung cuộc
     const finalScore = totalWeekPoint + totalMonthPoint;
 
     return {

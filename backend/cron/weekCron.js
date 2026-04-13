@@ -1,77 +1,20 @@
-// import cron from "node-cron";
-// import { Week } from "../models/weekModel.js";
-// import { SchoolYear } from "../models/schoolYearModel.js";
-
-// const startWeekCronJob = () => {
-//   cron.schedule(
-//     "* * * * *",
-//     async () => {
-//       console.log(
-//         `[CRON JOB] Đang dọn dẹp và đồng bộ lịch tuần: ${new Date().toLocaleString("vi-VN")}`,
-//       );
-
-//       try {
-//         const now = new Date();
-//         const schoolYears = await SchoolYear.find();
-
-//         for (const year of schoolYears) {
-//           // 1. Tìm tuần chính danh của ngày hôm nay
-//           const activeWeek = await Week.findOne({
-//             schoolYearId: year._id,
-//             startDate: { $lte: now },
-//             endDate: { $gte: now },
-//           });
-
-//           if (activeWeek) {
-//             // Mở tuần này ra
-//             await Week.updateOne({ _id: activeWeek._id }, { isLocked: false });
-//             // KHÓA toàn bộ các tuần còn lại trong năm học đó
-//             await Week.updateMany(
-//               { schoolYearId: year._id, _id: { $ne: activeWeek._id } },
-//               { isLocked: true },
-//             );
-//             console.log(`[CRON] Đã kích hoạt Tuần: ${activeWeek.name}`);
-//           } else {
-//             // Nếu hôm nay không thuộc tuần nào (Lễ/Tết) -> Khóa toàn bộ để an toàn
-//             await Week.updateMany(
-//               { schoolYearId: year._id },
-//               { isLocked: true },
-//             );
-//             console.log(
-//               `[CRON] Không có tuần nào active. Đã khóa sổ toàn bộ Năm học: ${year.name}`,
-//             );
-//           }
-//         }
-//       } catch (error) {
-//         console.error(`[CRON JOB ERROR]:`, error);
-//       }
-//     },
-//     { scheduled: true, timezone: "Asia/Ho_Chi_Minh" },
-//   );
-// };
-
-// export default startWeekCronJob;
-
 import cron from "node-cron";
 import { Week } from "../models/weekModel.js";
 import { SchoolYear } from "../models/schoolYearModel.js";
+import { Notification } from "../models/notificationModel.js"; // BỔ SUNG
+import { getIO } from "../socket.js"; // BỔ SUNG
 
 const startWeekCronJob = () => {
-  // Cài đặt lịch: 00:00 mỗi ngày (Phút 0, Giờ 0, Mọi ngày, Mọi tháng, Mọi thứ)
   cron.schedule(
     "0 0 * * *",
     async () => {
-      console.log(
-        `[CRON JOB] Đang chạy tác vụ tự động Khóa/Mở Tuần lúc: ${new Date().toLocaleString("vi-VN")}`,
-      );
-
+      console.log(`[CRON JOB] Đang chạy tác vụ tự động Khóa/Mở Tuần...`);
       try {
         const today = new Date();
-
         const schoolYears = await SchoolYear.find();
+        let message = ""; // Chứa nội dung thông báo
 
         for (const year of schoolYears) {
-          // Tìm tuần thuộc về ngày hôm nay
           const activeWeek = await Week.findOne({
             schoolYearId: year._id,
             startDate: { $lte: today },
@@ -79,14 +22,12 @@ const startWeekCronJob = () => {
           });
 
           if (activeWeek) {
-            // Đảm bảo Tuần của hôm nay được mở
             if (activeWeek.isLocked) {
               activeWeek.isLocked = false;
               await activeWeek.save();
-              console.log(`[CRON] Đã MỞ khóa Tuần: ${activeWeek.name}`);
+              message = `Hệ thống vừa tự động MỞ KHÓA ${activeWeek.name} để chấm điểm.`;
             }
 
-            // Khóa tất cả các tuần CÒN LẠI (dọn dẹp những tuần Admin lỡ mở bằng tay hôm qua)
             const lockedResult = await Week.updateMany(
               {
                 schoolYearId: year._id,
@@ -95,24 +36,31 @@ const startWeekCronJob = () => {
               },
               { isLocked: true },
             );
-
-            if (lockedResult.modifiedCount > 0) {
-              console.log(
-                `[CRON] Đã tự động dọn dẹp và KHÓA ${lockedResult.modifiedCount} tuần cũ.`,
-              );
+            if (lockedResult.modifiedCount > 0 && !message) {
+              message = `Hệ thống vừa tự động dọn dẹp và khóa các tuần cũ.`;
             }
           } else {
-            // Không có tuần nào của hôm nay, KHÓA toàn bộ
             const lockedAll = await Week.updateMany(
               { schoolYearId: year._id, isLocked: false },
               { isLocked: true },
             );
             if (lockedAll.modifiedCount > 0) {
-              console.log(
-                `[CRON] Không có tuần nào active. Đã tự động KHÓA ${lockedAll.modifiedCount} tuần.`,
-              );
+              message = `Hệ thống tự động KHÓA SỔ toàn bộ do không có tuần thi đua nào hiện hành.`;
             }
           }
+        }
+
+        // BỔ SUNG LOGIC GỬI THÔNG BÁO REALTIME:
+        if (message !== "") {
+          const newNotif = await Notification.create({
+            title: "Cập nhật tự động (Cron Job)",
+            message: message,
+            type: "SYSTEM",
+            targetRole: "admin",
+          });
+
+          // Phát tín hiệu tới các Admin đang online
+          getIO().to("admins").emit("new_notification", newNotif);
         }
 
         console.log(`[CRON JOB] Hoàn tất quét hệ thống!`);
@@ -120,10 +68,7 @@ const startWeekCronJob = () => {
         console.error(`[CRON JOB ERROR] Lỗi khi chạy tác vụ:`, error);
       }
     },
-    {
-      scheduled: true,
-      timezone: "Asia/Ho_Chi_Minh",
-    },
+    { scheduled: true, timezone: "Asia/Ho_Chi_Minh" },
   );
 };
 

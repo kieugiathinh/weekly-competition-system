@@ -1,6 +1,9 @@
 import { WeeklyScore } from "../models/weeklyScoreModel.js";
 import { Week } from "../models/weekModel.js";
 import { Criterion } from "../models/criterionModel.js";
+import { Class } from "../models/classModel.js"; // Bổ sung import Class
+import { Notification } from "../models/notificationModel.js"; // Bổ sung
+import { getIO } from "../socket.js"; // Bổ sung
 
 // 1. Lưu điểm (Gộp chung Tạo mới và Cập nhật - Upsert)
 const saveScoreService = async (data) => {
@@ -21,12 +24,9 @@ const saveScoreService = async (data) => {
 
   // Lặp qua mảng details mà Frontend gửi lên
   for (const item of details) {
-    // Truy vấn vào CSDL để lấy mức điểm GỐC của tiêu chí đó
     const criterion = await Criterion.findById(item.criterionId);
 
     if (criterion) {
-      // Công thức: Tổng = (Số lượng * Mức điểm) cộng dồn
-      // Vì bạn đã lưu điểm trừ là số âm (VD: -4), nên cứ làm phép CỘNG bình thường
       calculatedTotalScore += item.quantity * criterion.point;
 
       processedDetails.push({
@@ -38,32 +38,54 @@ const saveScoreService = async (data) => {
 
   // 1.3 Kiểm tra xem lớp này ở tuần này đã có bảng điểm chưa
   let scoreRecord = await WeeklyScore.findOne({ classId, weekId });
+  let savedData;
+  let returnMsg = "";
 
   if (scoreRecord) {
-    // NẾU CÓ RỒI: Tiến hành Cập nhật (Ghi đè chi tiết và điểm mới)
     scoreRecord.details = processedDetails;
     scoreRecord.totalScore = calculatedTotalScore;
-    scoreRecord.evaluatedBy = evaluatedBy; // Cập nhật lại người chấm mới nhất
-    await scoreRecord.save();
-    return { message: "Đã cập nhật điểm thành công", data: scoreRecord };
+    scoreRecord.evaluatedBy = evaluatedBy;
+    savedData = await scoreRecord.save();
+    returnMsg = "Đã cập nhật điểm thành công";
   } else {
-    // NẾU CHƯA CÓ: Tạo bảng điểm mới
-    const newScore = await WeeklyScore.create({
+    savedData = await WeeklyScore.create({
       classId,
       weekId,
       evaluatedBy,
       totalScore: calculatedTotalScore,
       details: processedDetails,
     });
-    return { message: "Đã lưu điểm mới thành công", data: newScore };
+    returnMsg = "Đã lưu điểm mới thành công";
   }
+
+  // --- BẮT ĐẦU LOGIC PHÁT THÔNG BÁO REALTIME ---
+  try {
+    const cls = await Class.findById(classId);
+    if (cls && week) {
+      // 1. Lưu vào CSDL
+      const newNotif = await Notification.create({
+        title: "Có cập nhật điểm Tuần",
+        message: `Lớp ${cls.name} vừa được cập nhật điểm cho ${week.name}. Tổng điểm: ${calculatedTotalScore}`,
+        type: "SCORE",
+        targetRole: "admin",
+      });
+
+      // 2. Phát Socket tới các Admin đang online
+      getIO().to("admins").emit("new_notification", newNotif);
+    }
+  } catch (err) {
+    console.error("Lỗi khi tạo thông báo điểm tuần:", err);
+  }
+  // --- KẾT THÚC LOGIC THÔNG BÁO ---
+
+  return { message: returnMsg, data: savedData };
 };
 
 // 2. Lấy Bảng Xếp Hạng của 1 Tuần cụ thể
 const getRankingByWeekService = async (weekId) => {
   const ranking = await WeeklyScore.find({ weekId })
-    .populate("classId", "name grade") // Lấy tên lớp và khối
-    .sort({ totalScore: -1 }); // Sắp xếp TỔNG ĐIỂM giảm dần (Lớp cao điểm nhất lên đầu)
+    .populate("classId", "name grade")
+    .sort({ totalScore: -1 });
 
   return ranking;
 };
@@ -73,8 +95,8 @@ const getScoreDetailService = async (scoreId) => {
   const detail = await WeeklyScore.findById(scoreId)
     .populate("classId", "name grade")
     .populate("weekId", "name isLocked")
-    .populate("evaluatedBy", "name username") // Ai là người chấm
-    .populate("details.criterionId", "name type point"); // Lấy tên lỗi và mức điểm trừ/cộng
+    .populate("evaluatedBy", "name username")
+    .populate("details.criterionId", "name type point");
 
   if (!detail) throw new Error("Không tìm thấy bảng điểm");
   return detail;
@@ -84,7 +106,6 @@ const deleteScoreService = async (id) => {
   const score = await WeeklyScore.findById(id);
   if (!score) throw new Error("Không tìm thấy bảng điểm");
 
-  // Kiểm tra xem tuần đó đã khóa chưa, khóa rồi thì cấm xóa
   const week = await Week.findById(score.weekId);
   if (week && week.isLocked)
     throw new Error("Tuần này đã khóa sổ, không thể xóa điểm!");
