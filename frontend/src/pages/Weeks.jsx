@@ -100,9 +100,9 @@ const Weeks = () => {
         await weekApi.update(editingId, formData);
         toast.success("Cập nhật tuần thành công");
       } else {
-        // Ép định dạng isLocked: true khi tạo mới
-        await weekApi.create({ ...formData, isLocked: true });
-        toast.success("Tạo tuần mới thành công (Mặc định: Đã khóa)");
+        // Backend sẽ tự động tính toán trạng thái Mở/Khóa dựa vào thời gian
+        await weekApi.create(formData);
+        toast.success("Tạo tuần mới thành công");
       }
       closeModal();
       fetchWeeks(selectedYearId);
@@ -131,9 +131,8 @@ const Weeks = () => {
   const toggleLock = async (id, currentStatus) => {
     if (isPastYear) return;
 
-    // Xác nhận trước khi thay đổi
     const confirmMessage = currentStatus
-      ? "Bạn có chắc chắn muốn MỞ KHÓA tuần này không? (Các lớp sẽ có thể nhập và sửa điểm)"
+      ? "Bạn có chắc chắn muốn MỞ KHÓA tuần này không? (Các tuần khác sẽ tự động bị khóa)"
       : "Bạn có chắc chắn muốn KHÓA SỔ tuần này không? (Mọi dữ liệu điểm sẽ bị chốt)";
 
     if (!window.confirm(confirmMessage)) return;
