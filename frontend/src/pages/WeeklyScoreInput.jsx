@@ -188,7 +188,7 @@ const WeeklyScoreInput = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={handleGoBack}
-            className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors border border-transparent hover:border-gray-200"
+            className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors border border-transparent hover:border-gray-200 cursor-pointer"
             title="Quay lại danh sách"
           >
             <ChevronLeft size={20} />
@@ -251,12 +251,12 @@ const WeeklyScoreInput = () => {
                       className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-blue-50/30 transition-colors"
                     >
                       <div className="flex-1">
-                        <h4 className="font-medium text-gray-800">
+                        <h4 className="font-normal text-gray-800">
                           {crit.name}
                         </h4>
                         <div className="flex items-center gap-2 mt-1.5">
                           <span
-                            className={`text-xs font-semibold px-2 py-0.5 rounded border ${crit.type === "penalty" ? "bg-red-50 text-red-600 border-red-100" : "bg-green-50 text-green-600 border-green-100"}`}
+                            className={`text-xs font-medium px-2 py-0.5 rounded border ${crit.type === "penalty" ? "bg-red-50 text-red-600 border-red-100" : "bg-green-50 text-green-600 border-green-100"}`}
                           >
                             {crit.point > 0 ? `+${crit.point}` : crit.point} đ /
                             lần
@@ -268,7 +268,7 @@ const WeeklyScoreInput = () => {
                       <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1 shadow-sm w-fit self-start md:self-center focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 transition-all">
                         <button
                           onClick={() => updateQty(crit._id, -1)}
-                          className="w-9 h-9 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 transition-colors"
+                          className="w-9 h-9 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer"
                         >
                           <Minus size={18} />
                         </button>
@@ -288,7 +288,7 @@ const WeeklyScoreInput = () => {
 
                         <button
                           onClick={() => updateQty(crit._id, 1)}
-                          className="w-9 h-9 flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                          className="w-9 h-9 flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors cursor-pointer"
                         >
                           <Plus size={18} />
                         </button>
@@ -323,15 +323,15 @@ const WeeklyScoreInput = () => {
           <div className="flex gap-3 w-full md:w-auto">
             <button
               onClick={handleGoBack}
-              className="flex-1 md:flex-none px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+              className="flex-1 md:flex-none px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all cursor-pointer"
             >
               Hủy bỏ
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 md:flex-none px-8 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm flex items-center justify-center gap-2 transition-all"
+              className="flex-1 md:flex-none px-8 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
-              <Save size={18} /> Lưu Bảng Điểm
+              <Save size={18} /> Lưu
             </button>
           </div>
         </div>
