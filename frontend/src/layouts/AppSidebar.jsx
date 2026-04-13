@@ -50,9 +50,6 @@ const AppSidebar = () => {
 
   const { user } = useAuth();
 
-  // LỌC MENU THEO PHÂN QUYỀN
-  // - Admin (Tổng phụ trách): Thấy toàn bộ các chức năng (bao gồm cả Chấm điểm Tháng)
-  // - User (Cờ đỏ): Chỉ thấy Bảng điều khiển, Chấm điểm Tuần và Hướng dẫn
   const filteredNavItems = navItems.filter((nav) => {
     if (user?.role === "admin") return true;
     return nav.path === "/" || nav.path === "/scoring" || nav.path === "/guide";
@@ -67,13 +64,14 @@ const AppSidebar = () => {
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="py-6 flex justify-center border-b border-gray-100 mb-4">
+      {/* Thu gọn khoảng cách khu vực Logo để tiết kiệm diện tích */}
+      <div className="py-4 flex justify-center border-b border-gray-100 mb-3">
         <Link to="/" className="flex flex-col items-center gap-2">
           <img
             src={logo}
             alt="Logo"
             className={`rounded-full object-cover border-2 border-blue-100 shadow-sm transition-all duration-300
-              ${isExpanded || isHovered || isMobileOpen ? "w-16 h-16" : "w-12 h-12"}`}
+              ${isExpanded || isHovered || isMobileOpen ? "w-14 h-14" : "w-10 h-10"}`}
           />
           {(isExpanded || isHovered || isMobileOpen) && (
             <div className="text-center mt-1 animate-in fade-in duration-300">
@@ -88,12 +86,13 @@ const AppSidebar = () => {
         </Link>
       </div>
 
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
-        <nav className="mb-6">
-          <div className="flex flex-col gap-4">
+      {/* Áp dụng CSS ẩn thanh cuộn: [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] */}
+      <div className="flex flex-col overflow-y-auto duration-300 ease-linear pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <nav className="mb-2">
+          <div className="flex flex-col gap-2">
             <div>
               <h2
-                className={`mb-4 text-xs font-semibold uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}
+                className={`mb-2 text-[11px] font-semibold uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}
               >
                 {isExpanded || isHovered || isMobileOpen ? (
                   "Quản lý chung"
@@ -102,12 +101,13 @@ const AppSidebar = () => {
                 )}
               </h2>
 
-              <ul className="flex flex-col gap-2">
+              {/* Thu hẹp khoảng cách giữa các thẻ li (gap-2 -> gap-1) */}
+              <ul className="flex flex-col gap-1">
                 {filteredNavItems.map((nav) => (
                   <li key={nav.name}>
                     <Link
                       to={nav.path}
-                      className={`flex items-center gap-3 px-3 py-2.5 font-medium rounded-lg transition-colors group
+                      className={`flex items-center gap-3 px-3 py-2 font-medium rounded-lg transition-colors group
                         ${
                           isActive(nav.path)
                             ? "bg-blue-50 text-blue-600"
@@ -122,7 +122,7 @@ const AppSidebar = () => {
                         {nav.icon}
                       </span>
                       {(isExpanded || isHovered || isMobileOpen) && (
-                        <span>{nav.name}</span>
+                        <span className="text-base">{nav.name}</span>
                       )}
                     </Link>
                   </li>

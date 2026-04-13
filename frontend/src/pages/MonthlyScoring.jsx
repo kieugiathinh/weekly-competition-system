@@ -341,7 +341,7 @@ const MonthlyScoring = () => {
               <select
                 value={selectedYearId}
                 onChange={(e) => setSelectedYearId(e.target.value)}
-                className="w-full sm:w-auto px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full sm:w-auto px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               >
                 {schoolYears.map((y) => (
                   <option key={y._id} value={y._id}>
@@ -377,7 +377,7 @@ const MonthlyScoring = () => {
               <button
                 onClick={handleExportExcel}
                 disabled={monthsList.length === 0 || allScores.length === 0}
-                className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors font-bold shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors font-bold shadow-sm w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <Download size={18} /> Xuất Báo Cáo
               </button>
@@ -418,7 +418,7 @@ const MonthlyScoring = () => {
         <div className="flex bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm w-fit mb-2">
           <button
             onClick={() => setActiveTab("all")}
-            className={`px-6 py-2 rounded-lg font-bold transition-all ${
+            className={`px-6 py-2 rounded-lg font-bold transition-all cursor-pointer ${
               activeTab === "all"
                 ? "bg-blue-50 text-blue-600 shadow-sm"
                 : "text-gray-500 hover:bg-gray-50"
@@ -428,7 +428,7 @@ const MonthlyScoring = () => {
           </button>
           <button
             onClick={() => setActiveTab("6-7")}
-            className={`px-6 py-2 rounded-lg font-bold transition-all ${
+            className={`px-6 py-2 rounded-lg font-bold transition-all cursor-pointer ${
               activeTab === "6-7"
                 ? "bg-blue-50 text-blue-600 shadow-sm"
                 : "text-gray-500 hover:bg-gray-50"
@@ -438,7 +438,7 @@ const MonthlyScoring = () => {
           </button>
           <button
             onClick={() => setActiveTab("8-9")}
-            className={`px-6 py-2 rounded-lg font-bold transition-all ${
+            className={`px-6 py-2 rounded-lg font-bold transition-all cursor-pointer ${
               activeTab === "8-9"
                 ? "bg-blue-50 text-blue-600 shadow-sm"
                 : "text-gray-500 hover:bg-gray-50"
@@ -563,20 +563,20 @@ const MonthlyScoring = () => {
                       </span>
                     ) : isMonthScored ? (
                       <>
-                        <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
+                        <button className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer">
                           <Edit3 size={18} />
                         </button>
                         <button
                           onClick={(e) =>
                             handleDeleteScore(e, cls.scoreRecord._id)
                           }
-                          className="p-2 text-red-500 hover:bg-red-100 rounded-lg z-10 relative transition-colors"
+                          className="p-2 text-red-500 hover:bg-red-100 rounded-lg z-10 relative transition-colors cursor-pointer"
                         >
                           <Trash2 size={18} />
                         </button>
                       </>
                     ) : (
-                      <button className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm whitespace-nowrap transition-colors">
+                      <button className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm whitespace-nowrap transition-colors cursor-pointer">
                         Bấm để chấm
                       </button>
                     )}

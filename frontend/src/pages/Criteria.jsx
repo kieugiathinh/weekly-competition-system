@@ -200,7 +200,7 @@ const Criteria = () => {
 
           <button
             onClick={() => openModal()}
-            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 h-10 rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap"
+            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 h-10 rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap cursor-pointer"
           >
             <Plus size={20} />
             <span>Thêm Tiêu chí</span>
@@ -272,13 +272,13 @@ const Criteria = () => {
                   <td className="px-6 py-4 text-right">
                     <button
                       onClick={() => openModal(c)}
-                      className="text-gray-400 hover:text-blue-600 mx-2 transition-colors"
+                      className="text-gray-400 hover:text-blue-600 mx-2 transition-colors cursor-pointer"
                     >
                       <Edit size={18} />
                     </button>
                     <button
                       onClick={() => handleDelete(c._id)}
-                      className="text-gray-400 hover:text-red-500 mx-2 transition-colors"
+                      className="text-gray-400 hover:text-red-500 mx-2 transition-colors cursor-pointer"
                     >
                       <Trash2 size={18} />
                     </button>
@@ -296,7 +296,7 @@ const Criteria = () => {
             Hiển thị{" "}
             <span className="font-medium text-gray-900">{startIndex + 1}</span>{" "}
             đến{" "}
-            <span className="font-medium text-gray-900">
+            <span className="font-medium text-gray-900 ">
               {Math.min(
                 startIndex + itemsPerPage,
                 filteredAndSortedCriteria.length,
@@ -311,7 +311,7 @@ const Criteria = () => {
             <button
               onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
             >
               <ChevronLeft size={18} />
             </button>
@@ -320,7 +320,7 @@ const Criteria = () => {
                 setCurrentPage((prev) => Math.min(prev + 1, totalPages))
               }
               disabled={currentPage === totalPages}
-              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
             >
               <ChevronRight size={18} />
             </button>
@@ -337,7 +337,7 @@ const Criteria = () => {
               </h3>
               <button
                 onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -362,7 +362,7 @@ const Criteria = () => {
                             : WEEK_CATEGORIES[0],
                       });
                     }}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm cursor-pointer"
                   >
                     <option value="week">Chấm hàng tuần</option>
                     <option value="month">Chấm phong trào tháng</option>
@@ -377,7 +377,7 @@ const Criteria = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, type: e.target.value })
                     }
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm cursor-pointer"
                   >
                     <option value="penalty">Điểm trừ (Vi phạm)</option>
                     <option value="bonus">Điểm cộng (Khen thưởng)</option>
@@ -394,7 +394,7 @@ const Criteria = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, category: e.target.value })
                   }
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm cursor-pointer"
                 >
                   {currentCategoryList.map((cat) => (
                     <option key={cat} value={cat}>
@@ -457,13 +457,13 @@ const Criteria = () => {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md"
+                  className="px-6 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md cursor-pointer"
                 >
                   Lưu lại
                 </button>

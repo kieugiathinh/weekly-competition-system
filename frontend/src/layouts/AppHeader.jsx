@@ -72,7 +72,7 @@ const AppHeader = () => {
         <div className="flex items-center justify-between w-full gap-2 px-3 py-3 lg:justify-normal lg:py-4">
           {/* NÚT MỞ RỘNG/THU GỌN SIDEBAR */}
           <button
-            className="flex items-center justify-center w-10 h-10 text-gray-500 rounded-lg hover:bg-gray-100 lg:border lg:border-gray-200 transition-colors"
+            className="flex items-center justify-center w-10 h-10 text-gray-500 rounded-lg hover:bg-gray-100 lg:border lg:border-gray-200 transition-colors cursor-pointer"
             onClick={handleToggle}
           >
             <Menu size={20} />
@@ -101,7 +101,7 @@ const AppHeader = () => {
         >
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none"
+            className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none cursor-pointer"
           >
             {/* Avatar chữ cái đầu */}
             <div
@@ -165,7 +165,7 @@ const AppHeader = () => {
               <div className="py-1 border-t border-gray-100 mt-1">
                 <button
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  className="flex w-full items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                 >
                   <LogOut size={16} />
                   Đăng xuất

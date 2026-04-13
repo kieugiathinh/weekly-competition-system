@@ -185,7 +185,7 @@ const Users = () => {
 
           <button
             onClick={() => openModal()}
-            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 h-10 rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap"
+            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 h-10 rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap cursor-pointer"
           >
             <UserPlus size={20} />
             <span>Tạo Tài Khoản</span>
@@ -263,14 +263,14 @@ const Users = () => {
                   <td className="px-6 py-4 text-right">
                     <button
                       onClick={() => openModal(u)}
-                      className="text-gray-400 hover:text-blue-600 mx-2 transition-colors"
+                      className="text-gray-400 hover:text-blue-600 mx-2 transition-colors cursor-pointer"
                     >
                       <Edit size={18} />
                     </button>
                     <button
                       onClick={() => handleDelete(u._id, u.role, u.name)}
                       disabled={u._id === currentUser?._id}
-                      className={`mx-2 transition-colors ${u._id === currentUser?._id ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-red-500"}`}
+                      className={`mx-2 transition-colors ${u._id === currentUser?._id ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-red-500 cursor-pointer"}`}
                     >
                       <Trash2 size={18} />
                     </button>
@@ -340,7 +340,7 @@ const Users = () => {
               </h3>
               <button
                 onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -406,7 +406,7 @@ const Users = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, role: e.target.value })
                   }
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white cursor-pointer"
                 >
                   <option value="user">Đội Cờ đỏ (Chỉ xem và chấm điểm)</option>
                   <option value="admin">
@@ -419,13 +419,13 @@ const Users = () => {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 cursor-pointer"
                 >
                   Lưu lại
                 </button>

@@ -249,7 +249,7 @@ const Months = () => {
           {!isPastYear && (
             <button
               onClick={() => openModal()}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm cursor-pointer"
             >
               <Plus size={18} /> Thêm Tháng
             </button>
@@ -379,7 +379,7 @@ const Months = () => {
               </div>
               <button
                 onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600 bg-white p-1.5 rounded-full border border-gray-200 shadow-sm transition-colors"
+                className="text-gray-400 hover:text-gray-600 bg-white p-1.5 rounded-full border border-gray-200 shadow-sm transition-colors cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -477,13 +477,13 @@ const Months = () => {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+                  className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm transition-colors"
+                  className="px-6 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm transition-colors cursor-pointer"
                 >
                   Lưu lại
                 </button>

@@ -144,7 +144,7 @@ const SchoolYears = () => {
 
           <button
             onClick={() => openModal()}
-            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 h-10 rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap"
+            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 h-10 rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap cursor-pointer"
           >
             <Plus size={20} />
             <span>Thêm Năm Học</span>
@@ -204,14 +204,14 @@ const SchoolYears = () => {
                   <td className="px-6 py-4 text-right">
                     <button
                       onClick={() => openModal(year)}
-                      className="text-gray-400 hover:text-blue-600 mx-2 transition-colors"
+                      className="text-gray-400 hover:text-blue-600 mx-2 transition-colors cursor-pointer"
                       title="Sửa"
                     >
                       <Edit size={18} />
                     </button>
                     <button
                       onClick={() => handleDelete(year._id)}
-                      className="text-gray-400 hover:text-red-500 mx-2 transition-colors"
+                      className="text-gray-400 hover:text-red-500 mx-2 transition-colors cursor-pointer"
                       title="Xóa"
                     >
                       <Trash2 size={18} />
@@ -291,7 +291,7 @@ const SchoolYears = () => {
               </h3>
               <button
                 onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -336,13 +336,13 @@ const SchoolYears = () => {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
                 >
                   Lưu lại
                 </button>
