@@ -135,6 +135,14 @@
 import { Week } from "../models/weekModel.js";
 import { SchoolYear } from "../models/schoolYearModel.js";
 
+const getVNDateString = (dateInput) => {
+  if (typeof dateInput === "string" && dateInput.length === 10)
+    return dateInput;
+  return new Date(dateInput)
+    .toLocaleString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" })
+    .split(" ")[0];
+};
+
 // 1. Tạo tuần mới
 const createWeekService = async (data) => {
   const { name, startDate, endDate, schoolYearId } = data;
@@ -142,12 +150,12 @@ const createWeekService = async (data) => {
   const yearExists = await SchoolYear.findById(schoolYearId);
   if (!yearExists) throw new Error("Năm học không tồn tại");
 
-  // Ép mốc thời gian chuẩn xác
-  const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0); // Đúng 00:00:00 ngày bắt đầu
+  // FIX TIMEZONE: Ép chính xác 00:00:00 và 23:59:59 theo múi giờ Việt Nam (+07:00)
+  const startStr = getVNDateString(startDate);
+  const start = new Date(`${startStr}T00:00:00.000+07:00`);
 
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999); // Đúng 23:59:59 ngày kết thúc
+  const endStr = getVNDateString(endDate);
+  const end = new Date(`${endStr}T23:59:59.999+07:00`);
 
   if (start > end) {
     throw new Error("Ngày bắt đầu không được lớn hơn ngày kết thúc");
@@ -166,9 +174,10 @@ const createWeekService = async (data) => {
   if (overlappingWeek) {
     const formattedStart = new Date(
       overlappingWeek.startDate,
-    ).toLocaleDateString("vi-VN");
+    ).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
     const formattedEnd = new Date(overlappingWeek.endDate).toLocaleDateString(
       "vi-VN",
+      { timeZone: "Asia/Ho_Chi_Minh" },
     );
     throw new Error(
       `Thời gian bị trùng lặp với ${overlappingWeek.name} (từ ${formattedStart} đến ${formattedEnd})`,
@@ -180,12 +189,10 @@ const createWeekService = async (data) => {
   data.startDate = start;
   data.endDate = end;
 
-  // Tính toán trạng thái tự động dựa trên thời gian thực
   const now = new Date().getTime();
   const isNowActive = now >= start.getTime() && now <= end.getTime();
   data.isLocked = !isNowActive;
 
-  // LOGIC ĐỘC QUYỀN: Nếu tuần mới này ĐANG MỞ, hãy KHÓA tất cả các tuần khác
   if (data.isLocked === false) {
     await Week.updateMany({ schoolYearId }, { isLocked: true });
   }
@@ -224,16 +231,13 @@ const updateWeekService = async (id, updateData) => {
   if (!weekData) throw new Error("Không tìm thấy Tuần thi đua");
 
   const checkName = updateData.name || weekData.name;
-  const checkStartDate = updateData.startDate || weekData.startDate;
-  const checkEndDate = updateData.endDate || weekData.endDate;
-  const checkYearId = updateData.schoolYearId || weekData.schoolYearId;
 
-  // Ép mốc thời gian chuẩn xác
-  const start = new Date(checkStartDate);
-  start.setHours(0, 0, 0, 0);
+  // FIX TIMEZONE CHO UPDATE
+  const startStr = getVNDateString(updateData.startDate || weekData.startDate);
+  const start = new Date(`${startStr}T00:00:00.000+07:00`);
 
-  const end = new Date(checkEndDate);
-  end.setHours(23, 59, 59, 999);
+  const endStr = getVNDateString(updateData.endDate || weekData.endDate);
+  const end = new Date(`${endStr}T23:59:59.999+07:00`);
 
   if (start > end) {
     throw new Error("Ngày bắt đầu không được lớn hơn ngày kết thúc");
@@ -242,7 +246,7 @@ const updateWeekService = async (id, updateData) => {
   if (updateData.name && updateData.name !== weekData.name) {
     const nameExists = await Week.findOne({
       name: checkName,
-      schoolYearId: checkYearId,
+      schoolYearId: updateData.schoolYearId || weekData.schoolYearId,
       _id: { $ne: id },
     });
     if (nameExists)
@@ -252,7 +256,7 @@ const updateWeekService = async (id, updateData) => {
   if (updateData.startDate || updateData.endDate) {
     const overlappingWeek = await Week.findOne({
       _id: { $ne: id },
-      schoolYearId: checkYearId,
+      schoolYearId: updateData.schoolYearId || weekData.schoolYearId,
       startDate: { $lte: end },
       endDate: { $gte: start },
     });
@@ -260,9 +264,10 @@ const updateWeekService = async (id, updateData) => {
     if (overlappingWeek) {
       const formattedStart = new Date(
         overlappingWeek.startDate,
-      ).toLocaleDateString("vi-VN");
+      ).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
       const formattedEnd = new Date(overlappingWeek.endDate).toLocaleDateString(
         "vi-VN",
+        { timeZone: "Asia/Ho_Chi_Minh" },
       );
       throw new Error(
         `Thời gian bị trùng lặp với ${overlappingWeek.name} (từ ${formattedStart} đến ${formattedEnd})`,
@@ -270,29 +275,25 @@ const updateWeekService = async (id, updateData) => {
     }
   }
 
-  // Cập nhật thông tin cơ bản
   weekData.name = checkName;
   weekData.startDate = start;
   weekData.endDate = end;
-  weekData.schoolYearId = checkYearId;
+  weekData.schoolYearId = updateData.schoolYearId || weekData.schoolYearId;
 
-  // LOGIC ĐỘC QUYỀN KHI ADMIN BẤM MỞ KHÓA THỦ CÔNG
   if (updateData.isLocked !== undefined) {
     weekData.isLocked = updateData.isLocked;
-    // Nếu Admin bấm MỞ (isLocked = false), tự động KHÓA tất cả các tuần khác
     if (weekData.isLocked === false) {
       await Week.updateMany(
-        { schoolYearId: checkYearId, _id: { $ne: id } },
+        { schoolYearId: weekData.schoolYearId, _id: { $ne: id } },
         { isLocked: true },
       );
     }
   } else {
-    // Nếu chỉ cập nhật ngày tháng, tự động tính toán lại trạng thái
     const now = new Date().getTime();
     weekData.isLocked = now < start.getTime() || now > end.getTime();
     if (weekData.isLocked === false) {
       await Week.updateMany(
-        { schoolYearId: checkYearId, _id: { $ne: id } },
+        { schoolYearId: weekData.schoolYearId, _id: { $ne: id } },
         { isLocked: true },
       );
     }

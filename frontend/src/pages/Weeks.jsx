@@ -4,6 +4,16 @@ import { toast } from "sonner";
 import { weekApi } from "../api/weekApi";
 import { schoolYearApi } from "../api/schoolYearApi";
 
+// Hàm chuyển đổi Date sang định dạng YYYY-MM-DD cho thẻ <input type="date"> chuẩn xác theo múi giờ địa phương
+const getLocalYYYYMMDD = (isoString) => {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const Weeks = () => {
   const [weeks, setWeeks] = useState([]);
   const [schoolYears, setSchoolYears] = useState([]);
@@ -68,8 +78,8 @@ const Weeks = () => {
       setEditingId(week._id);
       setFormData({
         name: week.name,
-        startDate: week.startDate ? week.startDate.split("T")[0] : "",
-        endDate: week.endDate ? week.endDate.split("T")[0] : "",
+        startDate: week.startDate ? getLocalYYYYMMDD(week.startDate) : "",
+        endDate: week.endDate ? getLocalYYYYMMDD(week.endDate) : "",
         schoolYearId: week.schoolYearId?._id || selectedYearId,
       });
     } else {
