@@ -10,6 +10,7 @@ import weekRoutes from "./routes/weekRoutes.js";
 import weeklyScoreRoutes from "./routes/weeklyScoreRoutes.js";
 import monthRoutes from "./routes/monthRoutes.js";
 import monthlyScoreRoutes from "./routes/monthlyScoreRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use("/api/weeks", weekRoutes);
 app.use("/api/scores", weeklyScoreRoutes);
 app.use("/api/months", monthRoutes);
 app.use("/api/monthly-scores", monthlyScoreRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Hệ thống chấm điểm thi đua đang hoạt động!");
