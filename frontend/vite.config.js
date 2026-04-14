@@ -20,17 +20,17 @@ export default defineConfig({
         display: "standalone",
         icons: [
           {
-            src: "logothcstranphu.png",
+            src: "/logothcstranphu.png",
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: "logothcstranphu.png",
+            src: "/logothcstranphu.png",
             sizes: "512x512",
             type: "image/png",
           },
           {
-            src: "logothcstranphu.png",
+            src: "/logothcstranphu.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any maskable",
