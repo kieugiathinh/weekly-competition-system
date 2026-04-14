@@ -304,26 +304,32 @@ const AppHeader = () => {
               }}
               className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none cursor-pointer"
             >
+              {/* Avatar tròn (Đã có sẵn rounded-full, thêm shrink-0 để không bị bóp méo) */}
               <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-white
+                className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center font-bold text-white
                 ${user?.role === "admin" ? "bg-blue-600" : "bg-orange-500"}
               `}
               >
                 {getInitials(user?.name)}
               </div>
 
+              {/* Thông tin tên và vai trò */}
               <div className="hidden md:block text-left">
-                <span className="block text-sm font-semibold text-gray-900 leading-tight">
+                {/* Thêm max-w-[130px] và truncate để cắt chữ thành ... */}
+                <span
+                  className="block text-sm font-semibold text-gray-900 leading-tight max-w-[130px] truncate"
+                  title={user?.name || "Người dùng"} // Thêm title để khi di chuột vào sẽ hiện tên đầy đủ
+                >
                   {user?.name || "Người dùng"}
                 </span>
-                <span className="block text-xs text-gray-500">
+                <span className="block text-xs text-gray-500 max-w-[130px] truncate">
                   {user?.role === "admin" ? "Tổng phụ trách" : "Đội cờ đỏ"}
                 </span>
               </div>
 
               <ChevronDown
                 size={16}
-                className={`text-gray-400 transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`}
+                className={`text-gray-400 shrink-0 transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`}
               />
             </button>
 

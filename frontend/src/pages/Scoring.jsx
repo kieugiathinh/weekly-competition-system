@@ -115,7 +115,7 @@ const Scoring = () => {
   }, [selectedWeekId, baseClasses]);
 
   const displayClasses = useMemo(() => {
-    // Lọc theo Tab Toàn trường / 6-7 / 8-9
+    // 1. Lọc theo Tab Toàn trường / 6-7 / 8-9
     let filteredBase = baseClasses;
     if (activeTab === "6-7") {
       filteredBase = baseClasses.filter((cls) => [6, 7].includes(cls.grade));
@@ -123,6 +123,7 @@ const Scoring = () => {
       filteredBase = baseClasses.filter((cls) => [8, 9].includes(cls.grade));
     }
 
+    // 2. Map điểm vào lớp
     const mergedClasses = filteredBase.map((cls) => {
       const classScore = allScores.find(
         (score) => score.classId._id === cls._id,
@@ -130,13 +131,52 @@ const Scoring = () => {
       return { ...cls, scoreRecord: classScore || null };
     });
 
-    return mergedClasses.sort((a, b) => {
+    // 3. Sắp xếp điểm giảm dần
+    const sorted = mergedClasses.sort((a, b) => {
       if (a.scoreRecord && b.scoreRecord)
         return b.scoreRecord.totalScore - a.scoreRecord.totalScore;
       if (a.scoreRecord && !b.scoreRecord) return -1;
       if (!a.scoreRecord && b.scoreRecord) return 1;
       return 0;
     });
+
+    // 4. Tính ĐỒNG HẠNG (Standard Competition Ranking)
+    // let currentRank = 1;
+    // let previousScore = null;
+
+    // sorted.forEach((cls, index) => {
+    //   if (cls.scoreRecord) {
+    //     // Nếu điểm khác với điểm của lớp đứng trước, cập nhật hạng = index hiện tại + 1
+    //     if (cls.scoreRecord.totalScore !== previousScore) {
+    //       currentRank = index + 1;
+    //     }
+    //     cls.computedRank = currentRank;
+    //     previousScore = cls.scoreRecord.totalScore;
+    //   } else {
+    //     cls.computedRank = null; // Lớp chưa chấm điểm
+    //   }
+    // });
+
+    // return sorted;
+
+    // 4. Tính ĐỒNG HẠNG (Dense Ranking - Hạng liên tục)
+    let currentRank = 0;
+    let previousScore = null;
+
+    sorted.forEach((cls) => {
+      if (cls.scoreRecord) {
+        // Nếu điểm khác với điểm lớp đứng trước (thấp hơn), thì hạng mới tăng lên 1
+        if (cls.scoreRecord.totalScore !== previousScore) {
+          currentRank += 1;
+        }
+        cls.computedRank = currentRank;
+        previousScore = cls.scoreRecord.totalScore;
+      } else {
+        cls.computedRank = null; // Lớp chưa chấm điểm
+      }
+    });
+
+    return sorted;
   }, [activeTab, baseClasses, allScores]);
 
   const handleGoToScoreInput = (classId) => {
@@ -190,9 +230,41 @@ const Scoring = () => {
             return 0;
           });
 
-        sheetClasses.forEach((cls, index) => {
+        // Áp dụng ĐỒNG HẠNG cho dữ liệu Excel
+        // let currentRank = 1;
+        // let previousScore = null;
+
+        // sheetClasses.forEach((cls, index) => {
+        //   if (cls.scoreRecord) {
+        //     if (cls.scoreRecord.totalScore !== previousScore) {
+        //       currentRank = index + 1;
+        //     }
+        //     cls.computedRank = currentRank;
+        //     previousScore = cls.scoreRecord.totalScore;
+        //   } else {
+        //     cls.computedRank = null;
+        //   }
+        // });
+        // Áp dụng ĐỒNG HẠNG cho dữ liệu Excel (Dense Ranking)
+        let currentRank = 0;
+        let previousScore = null;
+
+        sheetClasses.forEach((cls) => {
+          if (cls.scoreRecord) {
+            if (cls.scoreRecord.totalScore !== previousScore) {
+              currentRank += 1;
+            }
+            cls.computedRank = currentRank;
+            previousScore = cls.scoreRecord.totalScore;
+          } else {
+            cls.computedRank = null;
+          }
+        });
+
+        // Xuất file
+        sheetClasses.forEach((cls) => {
           worksheet.addRow({
-            rank: cls.scoreRecord ? index + 1 : "Chưa xếp",
+            rank: cls.computedRank !== null ? cls.computedRank : "Chưa xếp",
             className: cls.name,
             grade: `Khối ${cls.grade}`,
             totalScore: cls.scoreRecord
@@ -403,9 +475,9 @@ const Scoring = () => {
       {/* DANH SÁCH LỚP */}
       {weeksList.length > 0 && (
         <div className="flex flex-col gap-4">
-          {displayClasses.map((cls, index) => {
+          {displayClasses.map((cls) => {
             const isScored = !!cls.scoreRecord;
-            const rank = index + 1;
+            const rank = cls.computedRank; // SỬ DỤNG computedRank THAY VÌ index + 1
 
             return (
               <div

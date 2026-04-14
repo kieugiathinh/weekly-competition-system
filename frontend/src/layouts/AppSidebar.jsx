@@ -44,7 +44,13 @@ const navItems = [
 ];
 
 const AppSidebar = () => {
-  const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const {
+    isExpanded,
+    isMobileOpen,
+    isHovered,
+    setIsHovered,
+    toggleMobileSidebar,
+  } = useSidebar();
   const location = useLocation();
   const isActive = (path) => location.pathname === path;
 
@@ -107,6 +113,11 @@ const AppSidebar = () => {
                   <li key={nav.name}>
                     <Link
                       to={nav.path}
+                      onClick={() => {
+                        if (isMobileOpen) {
+                          toggleMobileSidebar();
+                        }
+                      }}
                       className={`flex items-center gap-3 px-3 py-2 font-medium rounded-lg transition-colors group
                         ${
                           isActive(nav.path)

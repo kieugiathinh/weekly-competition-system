@@ -203,6 +203,7 @@ const Classes = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 text-gray-500 text-sm border-b border-gray-200">
+                <th className="px-6 py-4 font-medium">STT</th>
                 <th className="px-6 py-4 font-medium">Tên Lớp</th>
                 <th className="px-6 py-4 font-medium">Khối</th>
                 <th className="px-6 py-4 font-medium">Năm học</th>
@@ -212,13 +213,13 @@ const Classes = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="4" className="text-center py-8 text-gray-500">
+                  <td colSpan="5" className="text-center py-8 text-gray-500">
                     Đang tải...
                   </td>
                 </tr>
               ) : filteredClasses.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="text-center py-12">
+                  <td colSpan="5" className="text-center py-12">
                     <AlertCircle className="mx-auto h-12 w-12 text-gray-300 mb-3" />
                     <p className="text-gray-500 font-medium">
                       Chưa có danh sách lớp cho năm học này.
@@ -229,11 +230,12 @@ const Classes = () => {
                   </td>
                 </tr>
               ) : (
-                filteredClasses.map((cls) => (
+                filteredClasses.map((cls, index) => (
                   <tr
                     key={cls._id}
                     className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                   >
+                    <td className="px-6 py-4 text-gray-600">{index + 1}</td>
                     <td className="px-6 py-4 font-bold text-gray-800">
                       {cls.name}
                     </td>
@@ -267,7 +269,7 @@ const Classes = () => {
         </div>
       </div>
 
-      {/* MODAL THÊM / SỬA (Đã khôi phục UI đẹp) */}
+      {/* MODAL THÊM / SỬA */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -298,9 +300,21 @@ const Classes = () => {
                     type="text"
                     required
                     value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      let detectedGrade = formData.grade;
+
+                      const match = value.match(/([6-9])/);
+                      if (match) {
+                        detectedGrade = Number(match[0]);
+                      }
+
+                      setFormData({
+                        ...formData,
+                        name: value,
+                        grade: detectedGrade,
+                      });
+                    }}
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-colors"
                     placeholder="Nhập tên lớp..."
                   />

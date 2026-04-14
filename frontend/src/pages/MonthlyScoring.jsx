@@ -128,18 +128,18 @@ const MonthlyScoring = () => {
       return { ...cls, scoreRecord: classScore || null };
     });
 
-    // 3. Sắp xếp
-    return mergedClasses.sort((a, b) => {
-      const checkIsScored = (record) => {
-        if (!record) return false;
-        return (
-          record.hasMonthlyScore === true ||
-          record.isMonthlyScored === true ||
-          (record.monthlyDetails && record.monthlyDetails.length > 0) ||
-          (record.totalMonthPoint !== undefined && record.totalMonthPoint !== 0)
-        );
-      };
+    const checkIsScored = (record) => {
+      if (!record) return false;
+      return (
+        record.hasMonthlyScore === true ||
+        record.isMonthlyScored === true ||
+        (record.monthlyDetails && record.monthlyDetails.length > 0) ||
+        (record.totalMonthPoint !== undefined && record.totalMonthPoint !== 0)
+      );
+    };
 
+    // 3. Sắp xếp
+    const sorted = mergedClasses.sort((a, b) => {
       const aScored = checkIsScored(a.scoreRecord);
       const bScored = checkIsScored(b.scoreRecord);
 
@@ -149,6 +149,42 @@ const MonthlyScoring = () => {
       if (!aScored && bScored) return 1;
       return 0;
     });
+
+    // // 4. TÍNH ĐỒNG HẠNG (Dựa trên finalScore)
+    // let currentRank = 0;
+    // let previousScore = null;
+
+    // sorted.forEach((cls, index) => {
+    //   if (checkIsScored(cls.scoreRecord)) {
+    //     if (cls.scoreRecord.finalScore !== previousScore) {
+    //       currentRank = index + 1;
+    //     }
+    //     cls.computedRank = currentRank;
+    //     previousScore = cls.scoreRecord.finalScore;
+    //   } else {
+    //     cls.computedRank = null; // Lớp chưa chấm điểm
+    //   }
+    // });
+
+    // return sorted;
+
+    // 4. TÍNH ĐỒNG HẠNG LIÊN TỤC (Dựa trên finalScore)
+    let currentRank = 0;
+    let previousScore = null;
+
+    sorted.forEach((cls) => {
+      if (checkIsScored(cls.scoreRecord)) {
+        if (cls.scoreRecord.finalScore !== previousScore) {
+          currentRank += 1;
+        }
+        cls.computedRank = currentRank;
+        previousScore = cls.scoreRecord.finalScore;
+      } else {
+        cls.computedRank = null;
+      }
+    });
+
+    return sorted;
   }, [activeTab, baseClasses, allScores]);
 
   const handleGoToScoreInput = (classId) => {
@@ -184,6 +220,16 @@ const MonthlyScoring = () => {
     try {
       const workbook = new ExcelJS.Workbook();
 
+      const checkIsScored = (record) => {
+        if (!record) return false;
+        return (
+          record.hasMonthlyScore === true ||
+          record.isMonthlyScored === true ||
+          (record.monthlyDetails && record.monthlyDetails.length > 0) ||
+          (record.totalMonthPoint !== undefined && record.totalMonthPoint !== 0)
+        );
+      };
+
       const generateSheet = (sheetName, grades) => {
         const worksheet = workbook.addWorksheet(sheetName);
 
@@ -204,17 +250,6 @@ const MonthlyScoring = () => {
             return { ...cls, scoreRecord: score || null };
           })
           .sort((a, b) => {
-            const checkIsScored = (record) => {
-              if (!record) return false;
-              return (
-                record.hasMonthlyScore === true ||
-                record.isMonthlyScored === true ||
-                (record.monthlyDetails && record.monthlyDetails.length > 0) ||
-                (record.totalMonthPoint !== undefined &&
-                  record.totalMonthPoint !== 0)
-              );
-            };
-
             const aScored = checkIsScored(a.scoreRecord);
             const bScored = checkIsScored(b.scoreRecord);
 
@@ -225,18 +260,44 @@ const MonthlyScoring = () => {
             return 0;
           });
 
-        sheetClasses.forEach((cls, index) => {
-          const isMonthScored =
-            cls.scoreRecord &&
-            (cls.scoreRecord.hasMonthlyScore === true ||
-              cls.scoreRecord.isMonthlyScored === true ||
-              (cls.scoreRecord.monthlyDetails &&
-                cls.scoreRecord.monthlyDetails.length > 0) ||
-              (cls.scoreRecord.totalMonthPoint !== undefined &&
-                cls.scoreRecord.totalMonthPoint !== 0));
+        // ÁP DỤNG ĐỒNG HẠNG CHO EXCEL THÁNG
+        // let currentRank = 1;
+        // let previousScore = null;
+
+        // sheetClasses.forEach((cls, index) => {
+        //   if (checkIsScored(cls.scoreRecord)) {
+        //     if (cls.scoreRecord.finalScore !== previousScore) {
+        //       currentRank = index + 1;
+        //     }
+        //     cls.computedRank = currentRank;
+        //     previousScore = cls.scoreRecord.finalScore;
+        //   } else {
+        //     cls.computedRank = null;
+        //   }
+        // });
+
+        // ÁP DỤNG ĐỒNG HẠNG LIÊN TỤC CHO EXCEL THÁNG
+        let currentRank = 0;
+        let previousScore = null;
+
+        sheetClasses.forEach((cls) => {
+          if (checkIsScored(cls.scoreRecord)) {
+            if (cls.scoreRecord.finalScore !== previousScore) {
+              currentRank += 1;
+            }
+            cls.computedRank = currentRank;
+            previousScore = cls.scoreRecord.finalScore;
+          } else {
+            cls.computedRank = null;
+          }
+        });
+
+        // Xuất ra Excel
+        sheetClasses.forEach((cls) => {
+          const isMonthScored = checkIsScored(cls.scoreRecord);
 
           worksheet.addRow({
-            rank: isMonthScored ? index + 1 : "Chưa xếp",
+            rank: cls.computedRank !== null ? cls.computedRank : "Chưa xếp",
             className: cls.name,
             grade: `Khối ${cls.grade}`,
             weekScore: cls.scoreRecord
@@ -452,7 +513,7 @@ const MonthlyScoring = () => {
       {/* DANH SÁCH LỚP */}
       {monthsList.length > 0 && (
         <div className="flex flex-col gap-4">
-          {displayClasses.map((cls, index) => {
+          {displayClasses.map((cls) => {
             const isMonthScored =
               cls.scoreRecord &&
               (cls.scoreRecord.hasMonthlyScore === true ||
@@ -461,7 +522,7 @@ const MonthlyScoring = () => {
                   cls.scoreRecord.monthlyDetails.length > 0) ||
                 (cls.scoreRecord.totalMonthPoint !== undefined &&
                   cls.scoreRecord.totalMonthPoint !== 0));
-            const rank = index + 1;
+            const rank = cls.computedRank; // SỬ DỤNG computedRank THAY VÌ index + 1
 
             return (
               <div
