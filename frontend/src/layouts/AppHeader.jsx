@@ -173,18 +173,20 @@ const AppHeader = () => {
 
   return (
     <header className="sticky top-0 flex w-full bg-white border-b border-gray-200 z-40">
-      <div className="flex flex-col items-center justify-between grow lg:flex-row lg:px-6">
-        <div className="flex items-center justify-between w-full gap-2 px-3 py-3 lg:justify-normal lg:py-4">
+      {/* SỬA FLEX-COL THÀNH FLEX ITEMS-CENTER JUSTIFY-BETWEEN GIỮ 1 HÀNG */}
+      <div className="flex items-center justify-between w-full grow px-4 py-3 lg:px-6 lg:py-4">
+        {/* KHU VỰC BÊN TRÁI (MENU CHÍNH & TÌM KIẾM) */}
+        <div className="flex items-center gap-4">
           {/* NÚT MỞ RỘNG/THU GỌN SIDEBAR */}
           <button
-            className="flex items-center justify-center w-10 h-10 text-gray-500 rounded-lg hover:bg-gray-100 lg:border lg:border-gray-200 transition-colors cursor-pointer"
+            className="flex items-center justify-center w-10 h-10 text-gray-500 rounded-lg hover:bg-gray-100 lg:border lg:border-gray-200 transition-colors cursor-pointer shrink-0"
             onClick={handleToggle}
           >
             <Menu size={20} />
           </button>
 
           {/* Ô TÌM KIẾM */}
-          <div className="hidden lg:block ml-4">
+          <div className="hidden lg:block">
             <div className="relative">
               <span className="absolute -translate-y-1/2 left-4 top-1/2 text-gray-400">
                 <Search size={18} />
@@ -200,7 +202,7 @@ const AppHeader = () => {
         </div>
 
         {/* KHU VỰC BÊN PHẢI (CHUÔNG THÔNG BÁO VÀ AVATAR) */}
-        <div className="flex items-center gap-2 lg:gap-4 px-5 py-4 lg:px-0">
+        <div className="flex items-center gap-3 lg:gap-4 shrink-0">
           {/* --- KHU VỰC CHUÔNG THÔNG BÁO --- */}
           {user?.role === "admin" && (
             <div className="relative" ref={notifDropdownRef}>
@@ -219,9 +221,9 @@ const AppHeader = () => {
                 )}
               </button>
 
-              {/* DROPDOWN DANH SÁCH THÔNG BÁO */}
+              {/* DROPDOWN DANH SÁCH THÔNG BÁO - Thêm w-[300px] cho mobile để không bị tràn viền */}
               {isNotifDropdownOpen && (
-                <div className="absolute right-0 top-[100%] mt-2 w-80 sm:w-96 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+                <div className="absolute right-0 top-[100%] mt-2 w-[300px] sm:w-96 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
                   <div className="flex items-center justify-between px-4 py-3 bg-gray-50/80 border-b border-gray-100">
                     <h3 className="font-bold text-gray-800 text-sm">
                       Thông báo
@@ -333,14 +335,14 @@ const AppHeader = () => {
               />
             </button>
 
-            {/* MENU DROPDOWN */}
+            {/* MENU DROPDOWN - Điều chỉnh right-0 cho đồng bộ */}
             {isDropdownOpen && (
-              <div className="absolute right-4 lg:right-0 top-[100%] mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-2 animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+              <div className="absolute right-0 top-[100%] mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-2 animate-in fade-in slide-in-from-top-2 duration-200 z-50">
                 <div className="px-4 py-3 border-b border-gray-100 md:hidden">
-                  <span className="block text-sm font-semibold text-gray-900">
+                  <span className="block text-sm font-semibold text-gray-900 truncate">
                     {user?.name || "Người dùng"}
                   </span>
-                  <span className="block text-xs text-gray-500 mt-0.5">
+                  <span className="block text-xs text-gray-500 mt-0.5 truncate">
                     {user?.role === "admin" ? "Tổng phụ trách" : "Đội cờ đỏ"}
                   </span>
                 </div>
@@ -354,14 +356,6 @@ const AppHeader = () => {
                     <User size={16} />
                     Hồ sơ cá nhân
                   </Link>
-                  {/* <Link
-                    to="/settings"
-                    onClick={() => setIsDropdownOpen(false)}
-                    className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors"
-                  >
-                    <Settings size={16} />
-                    Cài đặt
-                  </Link> */}
                 </div>
 
                 <div className="py-1 border-t border-gray-100 mt-1">
