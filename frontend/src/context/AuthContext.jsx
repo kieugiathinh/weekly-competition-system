@@ -11,18 +11,15 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
+      // Gọi API Login
       const { data } = await axiosInstance.post("/auth/login", {
         username,
         password,
       });
 
+      // Lưu State và LocalStorage
       setUser(data);
       localStorage.setItem("userInfo", JSON.stringify(data));
-
-      // THÊM DÒNG NÀY: Lưu Token vào Két sắt (Phải chắc chắn authController ở Backend đã return token nhé)
-      if (data.token) {
-        localStorage.setItem("token", data.token);
-      }
 
       return { success: true, message: data.message };
     } catch (error) {
@@ -38,9 +35,6 @@ export const AuthProvider = ({ children }) => {
       await axiosInstance.post("/auth/logout");
       setUser(null);
       localStorage.removeItem("userInfo");
-
-      // THÊM DÒNG NÀY: Xóa Token khỏi Két sắt khi đăng xuất
-      localStorage.removeItem("token");
     } catch (error) {
       console.error("Lỗi khi đăng xuất", error);
     }

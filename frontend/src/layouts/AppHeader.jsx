@@ -92,7 +92,6 @@ const AppHeader = () => {
       const socketUrl = apiUrl.replace("/api", "");
 
       const socket = io(socketUrl, {
-        auth: { token: localStorage.getItem("token") },
         withCredentials: true,
         transports: ["websocket", "polling"], // Giúp ổn định kết nối khi đưa lên Host
       });
