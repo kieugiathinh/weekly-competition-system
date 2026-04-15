@@ -58,7 +58,8 @@ const AppSidebar = () => {
 
   const filteredNavItems = navItems.filter((nav) => {
     if (user?.role === "admin") return true;
-    return nav.path === "/" || nav.path === "/scoring" || nav.path === "/guide";
+    // return nav.path === "/" || nav.path === "/scoring" || nav.path === "/guide";
+    return nav.path === "/scoring" || nav.path === "/guide";
   });
 
   return (
