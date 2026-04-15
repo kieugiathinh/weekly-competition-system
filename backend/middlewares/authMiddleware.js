@@ -2,8 +2,19 @@ import jwt from "jsonwebtoken";
 import { User } from "../models/userModel.js";
 
 const protect = async (req, res, next) => {
-  // Lấy token từ cookie có tên là 'jwt'
-  let token = req.cookies.jwt;
+  let token;
+
+  // 1. Ưu tiên tìm token trong Header (do Frontend gửi lên qua Bearer)
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
+    token = req.headers.authorization.split(" ")[1];
+  }
+  // 2. Dự phòng: Tìm trong cookie (giữ lại để tương thích cũ nếu cần)
+  else if (req.cookies.jwt) {
+    token = req.cookies.jwt;
+  }
 
   if (token) {
     try {
