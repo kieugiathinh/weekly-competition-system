@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   BookOpen,
   Award,
+  Layers,
 } from "lucide-react";
 
 import logo from "../assets/logothcstranphu.jpg";
@@ -31,6 +32,11 @@ const navItems = [
     name: "Quản lý Tiêu chí",
     icon: <ListChecks size={20} />,
     path: "/criteria",
+  },
+  {
+    name: "Quản lý Danh mục",
+    icon: <Layers size={20} />,
+    path: "/categories",
   },
   { name: "Quản lý Tuần", icon: <CalendarRange size={20} />, path: "/weeks" },
   { name: "Quản lý Tháng", icon: <CalendarDays size={20} />, path: "/months" },

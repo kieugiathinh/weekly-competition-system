@@ -22,6 +22,7 @@ import Months from "./pages/Months";
 import WeeklyScoreInput from "./pages/WeeklyScoreInput";
 import MonthlyScoring from "./pages/MonthlyScoring";
 import MonthlyScoreInput from "./pages/MonthlyScoreInput";
+import Categories from "./pages/Categories";
 
 function App() {
   return (
@@ -49,6 +50,7 @@ function App() {
                   <Route path="months" element={<Months />} />
                   <Route path="classes" element={<Classes />} />
                   <Route path="criteria" element={<Criteria />} />
+                  <Route path="categories" element={<Categories />} />
                   <Route path="weeks" element={<Weeks />} />
                   <Route path="users" element={<Users />} />
                   <Route path="monthly-scoring" element={<MonthlyScoring />} />

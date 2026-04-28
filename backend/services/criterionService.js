@@ -2,7 +2,7 @@ import { Criterion } from "../models/criterionModel.js";
 
 // 1. Tạo tiêu chí mới
 const createCriterionService = async (data) => {
-  const { name, type, point, category, scope, isActive } = data; // Thêm category và scope
+  const { name, type, point, categoryId, scope, isActive } = data;
 
   const criterionExists = await Criterion.findOne({ name });
   if (criterionExists) throw new Error("Tiêu chí này đã tồn tại");
@@ -22,7 +22,7 @@ const createCriterionService = async (data) => {
   return newCriterion;
 };
 
-// 2. Lấy danh sách tiêu chí (Hỗ trợ lọc theo isActive, type, VÀ BỔ SUNG scope, category)
+// 2. Lấy danh sách tiêu chí
 const getAllCriteriaService = async (query) => {
   const filter = {};
 
@@ -30,29 +30,33 @@ const getAllCriteriaService = async (query) => {
     filter.isActive = query.isActive === "true";
   }
   if (query.type) {
-    filter.type = query.type; // Lọc thêm theo type (bonus hoặc penalty)
+    filter.type = query.type;
   }
 
-  // Bổ sung lọc theo phạm vi (Dùng cho trang Chấm Tuần / Chấm Tháng sau này)
   if (query.scope) {
     filter.scope = query.scope;
   }
-  if (query.category) {
-    filter.category = query.category;
+
+  if (query.categoryId) {
+    filter.categoryId = query.categoryId;
   }
 
-  // Sắp xếp theo phạm vi -> phân loại -> tên để dữ liệu trả về gọn gàng
-  const criteria = await Criterion.find(filter).sort({
-    scope: -1,
-    type: 1,
-    name: 1,
-  });
+  const criteria = await Criterion.find(filter)
+    .populate("categoryId", "name isActive")
+    .sort({
+      scope: -1,
+      type: 1,
+      name: 1,
+    });
   return criteria;
 };
 
 // 3. Lấy chi tiết 1 tiêu chí
 const getCriterionByIdService = async (id) => {
-  const criterion = await Criterion.findById(id);
+  const criterion = await Criterion.findById(id).populate(
+    "categoryId",
+    "name isActive",
+  );
   if (!criterion) throw new Error("Không tìm thấy tiêu chí");
   return criterion;
 };
@@ -85,8 +89,10 @@ const updateCriterionService = async (id, updateData) => {
   criterion.point =
     updateData.point !== undefined ? updateData.point : criterion.point;
 
-  // ĐÂY CHÍNH LÀ 2 DÒNG CÒN THIẾU KHIẾN BẠN BỊ LỖI
-  criterion.category = updateData.category || criterion.category;
+  if (updateData.categoryId) {
+    criterion.categoryId = updateData.categoryId;
+  }
+
   criterion.scope = updateData.scope || criterion.scope;
 
   criterion.isActive =

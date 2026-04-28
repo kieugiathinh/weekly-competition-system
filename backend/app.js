@@ -11,6 +11,7 @@ import weeklyScoreRoutes from "./routes/weeklyScoreRoutes.js";
 import monthRoutes from "./routes/monthRoutes.js";
 import monthlyScoreRoutes from "./routes/monthlyScoreRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/school-years", schoolYearRoutes);
 app.use("/api/classes", classRoutes);
+app.use("/api/categories", categoryRoutes);
 app.use("/api/criteria", criterionRoutes);
 app.use("/api/weeks", weekRoutes);
 app.use("/api/scores", weeklyScoreRoutes);

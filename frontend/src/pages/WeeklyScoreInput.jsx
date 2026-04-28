@@ -100,7 +100,8 @@ const WeeklyScoreInput = () => {
   // 3. LOGIC GOM NHÓM TIÊU CHÍ VÀ SẮP XẾP THEO CATEGORY
   const groupedCriteria = useMemo(() => {
     const groups = criteria.reduce((acc, item) => {
-      const cat = item.category || "Khác";
+      // CẬP NHẬT: Lấy tên từ object categoryId
+      const cat = item.categoryId?.name || "Khác";
       if (!acc[cat]) acc[cat] = [];
       acc[cat].push(item);
       return acc;

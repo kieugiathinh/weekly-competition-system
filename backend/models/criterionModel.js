@@ -6,10 +6,10 @@ const criterionSchema = new mongoose.Schema(
     point: { type: Number, required: true },
     type: { type: String, enum: ["bonus", "penalty"], required: true },
 
-    category: {
-      type: String,
-      required: true,
-      default: "Khác",
+    categoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      required: [true, "Vui lòng chọn danh mục cho tiêu chí"],
     },
 
     scope: {

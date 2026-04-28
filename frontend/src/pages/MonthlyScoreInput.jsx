@@ -109,7 +109,8 @@ const MonthlyScoreInput = () => {
 
   const groupedCriteria = useMemo(() => {
     const groups = criteria.reduce((acc, item) => {
-      const cat = item.category || "KHÁC";
+      // CẬP NHẬT: Lấy tên từ object categoryId
+      const cat = item.categoryId?.name || "KHÁC";
       if (!acc[cat]) acc[cat] = [];
       acc[cat].push(item);
       return acc;

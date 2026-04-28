@@ -14,39 +14,21 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { criterionApi } from "../api/criterionApi";
-
-// 1. TÁCH THÀNH 2 MẢNG DANH MỤC ĐỘNG VÀ ĐÁNH SỐ THỨ TỰ
-const WEEK_CATEGORIES = [
-  "1. XẾP HÀNG",
-  "2. ĐỒNG PHỤC",
-  "3. GIỜ GIẤC - SĨ SỐ",
-  "4. NÓI TỤC, VÔ LỄ, ĐÁNH NHAU",
-  "5. VỆ SINH",
-  "6. HỌC TẬP (SỔ ĐẦU BÀI)",
-  "7. NỘI DUNG SINH HOẠT",
-  "8. CHĂM SÓC CÂY XANH",
-  "9. CHẤP HÀNH PHÁP LUẬT",
-  "Khác",
-];
-
-const MONTH_CATEGORIES = [
-  "1. LAO ĐỘNG",
-  "2. THAM GIA TRÒ CHƠI, HỘI THI",
-  "3. THAM GIA CUỘC THI DO HĐĐ PHÁT ĐỘNG",
-  "Khác",
-];
+import { categoryApi } from "../api/categoryApi"; // 1. IMPORT API DANH MỤC
 
 const Criteria = () => {
   const [criteria, setCriteria] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]); // 2. STATE LƯU DANH MỤC TỪ DB
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
+  // 3. THAY ĐỔI TRƯỜNG category THÀNH categoryId
   const [formData, setFormData] = useState({
     name: "",
     type: "penalty",
     point: "",
-    category: WEEK_CATEGORIES[0],
+    categoryId: "",
     scope: "week",
     isActive: true,
   });
@@ -55,28 +37,34 @@ const Criteria = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  const fetchCriteria = async () => {
+  // 4. FETCH CẢ TIÊU CHÍ LẪN DANH MỤC CÙNG LÚC
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const data = await criterionApi.getAll();
-      setCriteria(data);
+      const [critData, catData] = await Promise.all([
+        criterionApi.getAll(),
+        categoryApi.getAll(),
+      ]);
+      setCriteria(critData);
+      setCategoriesList(catData);
     } catch (error) {
-      toast.error("Lỗi khi tải danh sách tiêu chí");
+      toast.error("Lỗi khi tải dữ liệu tiêu chí hoặc danh mục");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchCriteria();
+    fetchData();
   }, []);
 
+  // 5. CẬP NHẬT LOGIC TÌM KIẾM & SẮP XẾP QUA categoryId.name
   const filteredAndSortedCriteria = criteria
     .filter(
       (c) =>
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.category &&
-          c.category.toLowerCase().includes(searchTerm.toLowerCase())),
+        (c.categoryId?.name &&
+          c.categoryId.name.toLowerCase().includes(searchTerm.toLowerCase())),
     )
     .sort((a, b) => {
       // Ưu tiên 1: Sắp xếp theo Phạm vi (Tuần trước, Tháng sau)
@@ -86,9 +74,9 @@ const Criteria = () => {
       if (scopeA === "week" && scopeB === "month") return -1;
       if (scopeA === "month" && scopeB === "week") return 1;
 
-      // Ưu tiên 2: Nếu cùng một phạm vi, tiếp tục sắp xếp theo Danh mục
-      const catA = a.category || "";
-      const catB = b.category || "";
+      // Ưu tiên 2: Sắp xếp theo Tên Danh mục
+      const catA = a.categoryId?.name || "";
+      const catB = b.categoryId?.name || "";
       return catA.localeCompare(catB);
     });
 
@@ -110,19 +98,22 @@ const Criteria = () => {
         name: item.name,
         type: item.type,
         point: item.point,
-        category:
-          item.category ||
-          (item.scope === "month" ? MONTH_CATEGORIES[0] : WEEK_CATEGORIES[0]),
+        // Lấy _id của object categoryId do đã populate
+        categoryId: item.categoryId?._id || item.categoryId || "",
         scope: item.scope || "week",
         isActive: item.isActive,
       });
     } else {
       setEditingId(null);
+      // Mặc định lấy danh mục "Tuần" đầu tiên đang hoạt động
+      const defaultCat = categoriesList.find(
+        (c) => c.scope === "week" && c.isActive,
+      );
       setFormData({
         name: "",
         type: "penalty",
         point: "",
-        category: WEEK_CATEGORIES[0],
+        categoryId: defaultCat ? defaultCat._id : "",
         scope: "week",
         isActive: true,
       });
@@ -137,8 +128,12 @@ const Criteria = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim() || formData.point === "") {
-      toast.warning("Vui lòng nhập đủ thông tin");
+    if (
+      !formData.name.trim() ||
+      formData.point === "" ||
+      !formData.categoryId
+    ) {
+      toast.warning("Vui lòng nhập đủ thông tin và chọn danh mục");
       return;
     }
 
@@ -152,7 +147,9 @@ const Criteria = () => {
         toast.success("Thêm mới thành công");
       }
       closeModal();
-      fetchCriteria();
+      // Chỉ fetch lại Criteria để tiết kiệm mạng
+      const newData = await criterionApi.getAll();
+      setCriteria(newData);
     } catch (error) {
       toast.error(error.response?.data?.message || "Lỗi khi lưu dữ liệu");
     }
@@ -163,16 +160,18 @@ const Criteria = () => {
       try {
         await criterionApi.delete(id);
         toast.success("Xóa thành công");
-        fetchCriteria();
+        const newData = await criterionApi.getAll();
+        setCriteria(newData);
       } catch (error) {
         toast.error("Không thể xóa tiêu chí này");
       }
     }
   };
 
-  // BIẾN XÁC ĐỊNH DANH SÁCH DROPDOWN HIỆN TẠI
-  const currentCategoryList =
-    formData.scope === "month" ? MONTH_CATEGORIES : WEEK_CATEGORIES;
+  // 6. LỌC DANH SÁCH DROPDOWN THEO PHẠM VI (TUẦN/THÁNG) CỦA FORM
+  const availableCategories = categoriesList.filter(
+    (cat) => cat.scope === formData.scope && cat.isActive,
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 font-sans">
@@ -249,8 +248,8 @@ const Criteria = () => {
                     {c.name}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-md border border-purple-100 italic w-max">
-                      <Tag size={12} /> {c.category || "Khác"}
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-md border border-purple-100 w-max">
+                      <Tag size={12} /> {c.categoryId?.name || "Lỗi Danh Mục"}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -353,13 +352,15 @@ const Criteria = () => {
                     value={formData.scope}
                     onChange={(e) => {
                       const newScope = e.target.value;
+                      // Tự động nhảy sang danh mục đầu tiên của scope mới
+                      const defaultCat = categoriesList.find(
+                        (c) => c.scope === newScope && c.isActive,
+                      );
+
                       setFormData({
                         ...formData,
                         scope: newScope,
-                        category:
-                          newScope === "month"
-                            ? MONTH_CATEGORIES[0]
-                            : WEEK_CATEGORIES[0],
+                        categoryId: defaultCat ? defaultCat._id : "",
                       });
                     }}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm cursor-pointer"
@@ -390,17 +391,21 @@ const Criteria = () => {
                   Danh mục nhóm
                 </label>
                 <select
-                  value={formData.category}
+                  value={formData.categoryId}
                   onChange={(e) =>
-                    setFormData({ ...formData, category: e.target.value })
+                    setFormData({ ...formData, categoryId: e.target.value })
                   }
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white text-sm cursor-pointer"
                 >
-                  {currentCategoryList.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
+                  {availableCategories.length === 0 ? (
+                    <option value="">-- Chưa có danh mục nào --</option>
+                  ) : (
+                    availableCategories.map((cat) => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.name}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -463,7 +468,8 @@ const Criteria = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md cursor-pointer"
+                  disabled={!formData.categoryId}
+                  className="px-6 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Lưu lại
                 </button>
